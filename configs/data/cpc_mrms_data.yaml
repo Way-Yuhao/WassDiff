@@ -1,0 +1,67 @@
+data:
+  train_val_split: .2
+  uniform_dequantization: false
+  batch_size: 12
+  image_size: 256 # size of high-resolution image
+  condition_size: 256 # size of low-resolution image
+  resolution_ratio: null # calculated in main
+  # crop_retry: 10 # this might not be used in code
+  skip_invalid_regions: true # do not use invalid regions in training
+  num_channels: 1
+  num_context_chs: 7 # does NOT include low_res input itself
+  condition_mode: 6
+
+  base_path: ${oc.env:DATA_PATH, "/home/yl241/data"} # fetch the environment variable DATA_PATH
+  dataset_path:
+    mrms: '${data.base_path}/CLIMATE/nexrad'
+    era5: '${data.base_path}/CLIMATE/ERA5'
+    interpolated_era5: '${data.base_path}/CLIMATE/ERA5_INTERP'
+    interpolated_cpc: '${data.base_path}/CLIMATE/CPC_INTERP/precip'
+    interpolated_cpc_gauge: '${data.base_path}/CLIMATE/CPC_INTERP/gauge_density'
+    cpc: '${data.base_path}/CLIMATE/CPC'
+    # mrms_daily: '/home/yl241/data/CLIMATE/mrms_daily/' # precomputed daily aggregates
+    # mrms_daily: '/home/yl241/data/CLIMATE/mrms_daily_12z/' # precomputed daily aggregates
+    mrms_daily: '${data.base_path}/CLIMATE/mrms_daily_12z_ending/' # precomputed daily aggregates
+    cpc_gauge: '${data.base_path}/CLIMATE/CPC/GAUGE_CONUS_RT'
+  era5_filenames:
+    surf_temp: "single_level/2m_temperature_{}.nc"
+    elevation: "single_level/elevation.nc"
+    vflux_e: "single_level/vertical_integral_of_eastward_water_vapour_flux_{}.nc"
+    vflux_n: "single_level/vertical_integral_of_northward_water_vapour_flux_{}.nc"
+    wind_u: "pressure_level/u_component_of_wind_500_{}.nc"
+    wind_v: "pressure_level/v_component_of_wind_500_{}.nc"
+  cpc_filenames: 'precip.{}.nc'
+  interpolated_era5_filenames: 'era5_interp_merged_{}.nc'
+
+  geo_bounds:
+    mrms:
+      lat_min: 55
+      lat_max: 20
+      lon_min: 230
+      lon_max: 300
+    era5_conus:
+      lat_min: 50 # us-canada boarder is 49; era5 file is 50
+      lat_max: 25
+      lon_min: 235
+      lon_max: 295
+  mrms_switched_to_multisensor_on: '20201013'
+  invalid_daily_aggregates: ['20150506', '20150507', '20150506','20201014', '20191012']
+  use_precomputed_daily_aggregates: true
+  use_precomputed_era5: true
+  use_precomputed_cpc: true # both precip and gauge density
+  centered: false # centered to [0, 1]
+  hourly_aggregate_def: 'ending' # computes era5 on the fly; mrms requires pre-computed
+  precip_rescale_c: 500 # mm/day
+  precip_norm_func: "log_plus_one" # "log", "log_plus_one", "linear"
+  cmaps:
+    surf_temp: "inferno"
+    elevation: "cividis"
+    density: 'copper'
+    vflux_e: null
+    vflux_n: null
+    vflux: null
+    wind_u: null
+    wind_v: null
+    wind: null
+  historical_mode: false
+
