@@ -48,7 +48,7 @@ class PrecipDataModule(LightningDataModule):
     def __init__(self,
                  data_config: dict,
                  batch_size: int = 12,
-                 num_workers: int = 0,
+                 num_workers: int = 1,
                  pin_memory: bool = False,
                  seed: int = 42
                  ) -> None:
@@ -119,8 +119,7 @@ class PrecipDataModule(LightningDataModule):
                                        num_workers=self.hparams.num_workers,
                                        sampler=self.train_sampler,
                                        pin_memory=self.hparams.pin_memory,
-                                       timeout=3600, # FIXME
-                                       # timeout=0,
+                                       timeout=3600,
                                        )
         return self.train_loader
 
