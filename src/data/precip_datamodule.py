@@ -107,13 +107,6 @@ class PrecipDataModule(LightningDataModule):
 
         :return: The train dataloader.
         """
-        # return DataLoader(
-        #     dataset=self.data_train,
-        #     batch_size=self.batch_size_per_device,
-        #     num_workers=self.hparams.num_workers,
-        #     pin_memory=self.hparams.pin_memory,
-        #     shuffle=True,
-        # )
         self.train_loader = DataLoader(self.train_val_dataset,
                                        batch_size=self.hparams.batch_size,
                                        num_workers=self.hparams.num_workers,

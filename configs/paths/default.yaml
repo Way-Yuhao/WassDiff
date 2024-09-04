@@ -16,3 +16,26 @@ output_dir: ${hydra:runtime.output_dir}
 
 # path to working directory
 work_dir: ${hydra:runtime.cwd}
+
+
+dataset_path:
+  base_path: /home/yl241/data # specific to Insight
+  mrms: '${paths.dataset_path.base_path}/CLIMATE/nexrad'
+  era5: '${paths.dataset_path.base_path}/CLIMATE/ERA5'
+  interpolated_era5: '${paths.dataset_path.base_path}/CLIMATE/ERA5_INTERP'
+  interpolated_cpc: '${paths.dataset_path.base_path}/CLIMATE/CPC_INTERP/precip'
+  interpolated_cpc_gauge: '${paths.dataset_path.base_path}/CLIMATE/CPC_INTERP/gauge_density'
+  cpc: '${paths.dataset_path.base_path}/CLIMATE/CPC'
+  # mrms_daily: '/home/yl241/data/CLIMATE/mrms_daily/' # precomputed daily aggregates
+  # mrms_daily: '/home/yl241/data/CLIMATE/mrms_daily_12z/' # precomputed daily aggregates
+  mrms_daily: '${paths.dataset_path.base_path}/CLIMATE/mrms_daily_12z_ending/' # precomputed daily aggregates
+  cpc_gauge: '${paths.dataset_path.base_path}/CLIMATE/CPC/GAUGE_CONUS_RT'
+era5_filenames:
+  surf_temp: "single_level/2m_temperature_{}.nc"
+  elevation: "single_level/elevation.nc"
+  vflux_e: "single_level/vertical_integral_of_eastward_water_vapour_flux_{}.nc"
+  vflux_n: "single_level/vertical_integral_of_northward_water_vapour_flux_{}.nc"
+  wind_u: "pressure_level/u_component_of_wind_500_{}.nc"
+  wind_v: "pressure_level/v_component_of_wind_500_{}.nc"
+cpc_filenames: 'precip.{}.nc'
+interpolated_era5_filenames: 'era5_interp_merged_{}.nc'
