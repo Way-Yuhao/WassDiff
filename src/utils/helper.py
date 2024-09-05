@@ -304,6 +304,7 @@ def visualize_batch(**kwargs):
 def visualize_batch_aggregate(**kwargs):
     raise NotImplementedError()
 
+
 def display_config_warnings():
     raise NotImplementedError()  # TODO
 

@@ -45,6 +45,7 @@ class WassDiffLitModule(LightningModule):
         # attributes to be defined elsewhere
         self.train_step_fn = None
         self.eval_step_fn = None
+        self.sampling_fn = None
 
         # internal flags
         self.automatic_optimization = False  # TODO verify
@@ -74,7 +75,7 @@ class WassDiffLitModule(LightningModule):
 
         :return: A dict containing the configured optimizers and learning-rate schedulers to be used for training.
         """
-        self.model_config.device = self.device # TODO: verify
+        self.model_config.device = self.device  # TODO: verify
 
         # Create data normalizer and its inverse
         self.scaler = datasets.get_data_scaler(self.model_config)
@@ -127,8 +128,8 @@ class WassDiffLitModule(LightningModule):
         sampling_shape = (self.model_config.sampling.sampling_batch_size, self.model_config.data.num_channels,
                           self.model_config.data.image_size, self.model_config.data.image_size)
         # TODO: verify cuda device
-        sampling_fn = sampling.get_sampling_fn(self.model_config, sde, sampling_shape, self.inverse_scaler,
-                                               sampling_eps)
+        self.sampling_fn = sampling.get_sampling_fn(self.model_config, sde, sampling_shape, self.inverse_scaler,
+                                                    sampling_eps)
         s = self.model_config.sampling.sampling_batch_size
         num_train_steps = self.model_config.training.n_iters
 
@@ -208,7 +209,8 @@ class WassDiffLitModule(LightningModule):
         condition, gt = self._generate_condition(batch_dict)
         eval_loss, _ = self.eval_step_fn(self.state, gt, condition)
         self.log("val/loss", eval_loss, on_step=False, on_epoch=True, prog_bar=True)
-        step_output = {"batch_dict": batch_dict}
+        step_output = {"batch_dict": batch_dict, "condition": condition}
+        return step_output
 
     def on_validation_epoch_end(self) -> None:
         """Lightning hook that is called when a validation epoch ends."""
@@ -231,16 +233,19 @@ class WassDiffLitModule(LightningModule):
         # generate null condition for sampling
         s = self.model_config.sampling.sampling_batch_size
         if self.model_config.data.condition_mode in [1, 4]:
-            sampling_null_condition = torch.ones((s, self.model_config.data.num_channels, self.model_config.data.condition_size,
-                                                  self.model_config.data.condition_size)) * self.model_config.model.null_token
+            sampling_null_condition = torch.ones(
+                (s, self.model_config.data.num_channels, self.model_config.data.condition_size,
+                 self.model_config.data.condition_size)) * self.model_config.model.null_token
         elif self.model_config.data.condition_mode in [2, 5, 6]:
-            sampling_null_condition = torch.ones((s, self.model_config.data.num_channels + self.model_config.data.num_context_chs,
-                                                  self.model_config.data.image_size,
-                                                  self.model_config.data.image_size)) * self.model_config.model.null_token
+            sampling_null_condition = torch.ones(
+                (s, self.model_config.data.num_channels + self.model_config.data.num_context_chs,
+                 self.model_config.data.image_size,
+                 self.model_config.data.image_size)) * self.model_config.model.null_token
         elif self.model_config.data.condition_mode == 3:
-            sampling_null_condition = torch.ones((s, self.model_config.data.num_context_chs, self.model_config.data.image_size,
-                                                  self.model_config.data.image_size)) * self.model_config.model.null_token
-        return sampling_null_condition
+            sampling_null_condition = torch.ones(
+                (s, self.model_config.data.num_context_chs, self.model_config.data.image_size,
+                 self.model_config.data.image_size)) * self.model_config.model.null_token
+        return sampling_null_condition.to(self.device)
 
     def _generate_condition(self, batch_dict: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         y = self.scaler(batch_dict['precip_gt'])  # .to(config.device))
