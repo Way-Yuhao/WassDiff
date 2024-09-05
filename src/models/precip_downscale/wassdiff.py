@@ -132,18 +132,6 @@ class WassDiffLitModule(LightningModule):
         s = self.model_config.sampling.sampling_batch_size
         num_train_steps = self.model_config.training.n_iters
 
-        # if self.hparams.scheduler is not None:
-        #     scheduler = self.hparams.scheduler(optimizer=optimizer)
-        #     return {
-        #         "optimizer": optimizer,
-        #         "lr_scheduler": {
-        #             "scheduler": scheduler,
-        #             "monitor": "val/loss",
-        #             "interval": "epoch",
-        #             "frequency": 1,
-        #         },
-        #     }
-        # return {"optimizer": optimizer}
         return optimizer
 
     def on_fit_start(self) -> None:
@@ -183,7 +171,7 @@ class WassDiffLitModule(LightningModule):
         raise NotImplementedError()
 
     def training_step(
-            self, batch: Dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:
+            self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
         """Perform a single training step on a batch of data from the training set.
 
         :param batch: A batch of data (a tuple) containing the input tensor of images and target
@@ -191,17 +179,19 @@ class WassDiffLitModule(LightningModule):
         :param batch_idx: The index of the current batch.
         :return: A tensor of losses between model predictions and targets.
         """
-        batch, _ = batch  # discard coordinates
-        condition, batch = self._generate_condition(batch)
-        condition = self._dropout_condition(condition)
-        loss, loss_dict = self.train_step_fn(self.state, batch, condition)
+        batch_dict, _ = batch  # discard coordinates
+        condition, gt = self._generate_condition(batch_dict)
+        condition, context_mask = self._dropout_condition(condition)
+        loss, loss_dict = self.train_step_fn(self.state, gt, condition)
 
         # TODO log freq?
         self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         if self.use_emd:
             self.log("train/emd_loss", loss_dict['emd_loss'], on_step=False, on_epoch=True, prog_bar=True)
             self.log("train/score_loss", loss_dict['score_loss'], on_step=False, on_epoch=True, prog_bar=True)
-        return loss  # TODO: verify
+        step_output = {"batch_dict": batch_dict, "loss_dict": loss_dict, 'gt': gt, 'condition': condition,
+                       'context_mask': context_mask}
+        return step_output
 
     def on_train_epoch_end(self) -> None:
         """Lightning hook that is called when a training epoch ends."""
@@ -214,9 +204,9 @@ class WassDiffLitModule(LightningModule):
             labels.
         :param batch_idx: The index of the current batch.
         """
-        batch, _ = batch  # discard coordinates
-        condition, batch = self._generate_condition(batch)
-        eval_loss, _ = self.eval_step_fn(self.state, batch, condition)
+        batch_dict, _ = batch  # discard coordinates
+        condition, gt = self._generate_condition(batch_dict)
+        eval_loss, _ = self.eval_step_fn(self.state, gt, condition)
         self.log("val/loss", eval_loss, on_step=False, on_epoch=True, prog_bar=True)
         return
 
@@ -289,7 +279,7 @@ class WassDiffLitModule(LightningModule):
         null_token_mask = torch.zeros_like(context_mask, device=self.device)
         null_token_mask[context_mask == 0] = self.model_config.model.null_token  # set to null token
         condition = condition + null_token_mask
-        return condition
+        return condition, context_mask
 
 
 if __name__ == "__main__":
