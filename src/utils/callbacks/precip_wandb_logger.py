@@ -22,6 +22,9 @@ class PrecipDataLogger(Callback):
         self.show_samples_at_start = show_samples_at_start
         self.show_unconditional_samples = show_unconditional_samples
 
+        if self.show_unconditional_samples:
+            raise NotImplementedError('Unconditional samples not implemented yet.')
+
         # to be defined elsewhere
         self.rainfall_dataset = None
         self.first_samples_logged = False
@@ -37,10 +40,10 @@ class PrecipDataLogger(Callback):
     def on_validation_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
                                 batch: Any, batch_idx: int, dataloader_idx: int = 0) -> None:
         if self.show_samples_at_start and not self.first_samples_logged:
-            # self._log_samples(pl_module, outputs)
+            self._log_samples(pl_module, outputs)
             self.first_samples_logged = True
         elif trainer.global_step % self.train_log_img_freq == 0 and trainer.global_step > 0:
-            # self._log_samples(pl_module, outputs)
+            self._log_samples(pl_module, outputs)
             self.first_samples_logged = True
 
     def on_train_batch_end(self, trainer: Trainer, pl_module: LightningModule,

@@ -3,5 +3,5 @@ log_precip_data:
   train_log_img_freq: 1000
   train_log_score_freq: 1000
   train_log_param_freq: 1000
-  show_samples_at_start: true
+  show_samples_at_start: false
   show_unconditional_samples: false

@@ -14,7 +14,6 @@ from src.models.ncsn import utils as mutils
 from src.utils.ncsn_utils import datasets as datasets
 
 
-
 class WassDiffLitModule(LightningModule):
     """
     """
