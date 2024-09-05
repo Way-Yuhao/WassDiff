@@ -60,6 +60,20 @@ class WassDiffLitModule(LightningModule):
 
         :param stage: Either `"fit"`, `"validate"`, `"test"`, or `"predict"`.
         """
+        # Compile via JiT
+        if self.hparams.compile and stage == "fit":
+            self.net = torch.compile(self.net)
+        return
+
+    def configure_optimizers(self) -> Dict[str, Any]:
+        """Choose what optimizers and learning-rate schedulers to use in your optimization.
+        Normally you'd need one. But in the case of GANs or similar you might have multiple.
+
+        Examples:
+            https://lightning.ai/docs/pytorch/latest/common/lightning_module.html#configure-optimizers
+
+        :return: A dict containing the configured optimizers and learning-rate schedulers to be used for training.
+        """
         self.model_config.device = self.device # TODO: verify
 
         # Create data normalizer and its inverse
@@ -117,23 +131,6 @@ class WassDiffLitModule(LightningModule):
                                                sampling_eps)
         s = self.model_config.sampling.sampling_batch_size
         num_train_steps = self.model_config.training.n_iters
-
-
-        # Compile via JiT
-        if self.hparams.compile and stage == "fit":
-            self.net = torch.compile(self.net)
-        return
-
-    def configure_optimizers(self) -> Dict[str, Any]:
-        """Choose what optimizers and learning-rate schedulers to use in your optimization.
-        Normally you'd need one. But in the case of GANs or similar you might have multiple.
-
-        Examples:
-            https://lightning.ai/docs/pytorch/latest/common/lightning_module.html#configure-optimizers
-
-        :return: A dict containing the configured optimizers and learning-rate schedulers to be used for training.
-        """
-
 
         # if self.hparams.scheduler is not None:
         #     scheduler = self.hparams.scheduler(optimizer=optimizer)
@@ -200,7 +197,7 @@ class WassDiffLitModule(LightningModule):
         # TODO log freq?
         self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         if self.use_emd:
-            self.log("train/emd", loss_dict['emd'], on_step=False, on_epoch=True, prog_bar=True)
+            self.log("train/emd_loss", loss_dict['emd_loss'], on_step=False, on_epoch=True, prog_bar=True)
             self.log("train/score_loss", loss_dict['score_loss'], on_step=False, on_epoch=True, prog_bar=True)
         return loss  # TODO: verify
 
@@ -281,15 +278,13 @@ class WassDiffLitModule(LightningModule):
             raise AttributeError()
         return condition, y
 
-    def _dropout_condition(self, condition: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def _dropout_condition(self, condition: torch.Tensor) -> torch.Tensor:
         # implement dropout
         context_mask = torch.bernoulli(torch.zeros(condition.shape[0]) + (1 - self.model_config.model.drop_prob))
-        # context_mask[context_mask == 0] = -1
         context_mask = context_mask[:, None, None, None]  # shape: (batch_size, 1, 1, 1)
-        # context_mask = context_mask.to(config.device)  # shape: (batch_size,)
+        context_mask = context_mask.to(self.device)  # shape: (batch_size,)
         condition = condition * context_mask  # shape: (batch_size, c, h, w)
-        # condition[context_mask == 0] = -1
-        null_token_mask = torch.zeros_like(context_mask)
+        null_token_mask = torch.zeros_like(context_mask, device=self.device)
         null_token_mask[context_mask == 0] = self.model_config.model.null_token  # set to null token
         condition = condition + null_token_mask
         return condition
