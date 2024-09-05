@@ -144,11 +144,13 @@ class WassDiffLitModule(LightningModule):
         #         },
         #     }
         # return {"optimizer": optimizer}
+        return optimizer
 
     def on_fit_start(self) -> None:
         """Lightning hook that is called when the fit begins."""
 
         self.sampling_null_condition = self._generate_null_condition()
+        self.state['optimizer'] = self.optimizers()  # TODO: verify
 
     def on_train_batch_start(self, batch, batch_idx) -> None:
         batch, _ = batch  # discard coordinates
@@ -202,7 +204,7 @@ class WassDiffLitModule(LightningModule):
         return loss  # TODO: verify
 
     def on_train_epoch_end(self) -> None:
-        "Lightning hook that is called when a training epoch ends."
+        """Lightning hook that is called when a training epoch ends."""
         pass
 
     def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> None:
@@ -219,7 +221,7 @@ class WassDiffLitModule(LightningModule):
         return
 
     def on_validation_epoch_end(self) -> None:
-        "Lightning hook that is called when a validation epoch ends."
+        """Lightning hook that is called when a validation epoch ends."""
         pass
 
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
