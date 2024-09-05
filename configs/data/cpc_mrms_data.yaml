@@ -42,4 +42,8 @@ data_config:
     wind_v: null
     wind: null
   historical_mode: false
+  dataset_path: ${paths.dataset_path}
+  era5_filenames: ${paths.era5_filenames}
+  cpc_filenames: ${paths.cpc_filenames}
+  interpolated_era5_filenames: ${paths.interpolated_era5_filenames}
 

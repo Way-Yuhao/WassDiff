@@ -17,7 +17,6 @@ output_dir: ${hydra:runtime.output_dir}
 # path to working directory
 work_dir: ${hydra:runtime.cwd}
 
-
 dataset_path:
   base_path: /home/yl241/data # specific to Insight
   mrms: '${paths.dataset_path.base_path}/CLIMATE/nexrad'

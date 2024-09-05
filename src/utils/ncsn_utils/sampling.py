@@ -25,7 +25,7 @@ from rich.progress import track
 from tqdm import tqdm
 from src.models.ncsn.utils import from_flattened_numpy, to_flattened_numpy, get_score_fn
 from scipy import integrate
-import sde_lib
+from src.utils.ncsn_utils import sde_lib
 from src.models.ncsn import utils as mutils
 
 _CORRECTORS = {}

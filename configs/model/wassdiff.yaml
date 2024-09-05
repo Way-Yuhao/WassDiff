@@ -1,6 +1,8 @@
 _target_: src.models.precip_downscale.wassdiff.WassDiffLitModule
+compile: false
 
 optimizer_config:
+  optim:
     weight_decay: 0
     optimizer: 'Adam'
     lr: 2e-4
@@ -11,7 +13,6 @@ optimizer_config:
     grad_clip: 1.0
 
 #scheduler:
-
 
 model_config:
   model:
@@ -53,6 +54,7 @@ model_config:
     num_context_chs: ${data.data_config.num_context_chs}
     condition_size: ${data.data_config.condition_size}
     centered: ${data.data_config.centered}
+    precip_rescale_c: ${data.data_config.precip_rescale_c}
   training:
     batch_size: null # TODO: remove this
     n_iters: 500000
@@ -65,4 +67,13 @@ model_config:
     use_emd: true # earth mover's distance
     emd_weight: 0.2 # weight for EMD loss
     compute_rescaled_emd: false
+  sampling:
+    n_steps_each: 1
+    noise_removal: true
+    probability_flow: false
+    snr: 0.16
+    method: 'pc'
+    predictor: 'reverse_diffusion'
+    corrector: 'langevin'
+    sampling_batch_size: 4
 
