@@ -189,7 +189,7 @@ class WassDiffLitModule(LightningModule):
         if self.use_emd:
             self.log("train/emd_loss", loss_dict['emd_loss'], on_step=False, on_epoch=True, prog_bar=True)
             self.log("train/score_loss", loss_dict['score_loss'], on_step=False, on_epoch=True, prog_bar=True)
-        step_output = {"batch_dict": batch_dict, "loss_dict": loss_dict, 'gt': gt, 'condition': condition,
+        step_output = {"batch_dict": batch_dict, "loss_dict": loss_dict, 'condition': condition,
                        'context_mask': context_mask}
         return step_output
 
@@ -197,7 +197,7 @@ class WassDiffLitModule(LightningModule):
         """Lightning hook that is called when a training epoch ends."""
         pass
 
-    def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> None:
+    def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
         """Perform a single validation step on a batch of data from the validation set.
 
         :param batch: A batch of data (a tuple) containing the input tensor of images and target
@@ -208,7 +208,7 @@ class WassDiffLitModule(LightningModule):
         condition, gt = self._generate_condition(batch_dict)
         eval_loss, _ = self.eval_step_fn(self.state, gt, condition)
         self.log("val/loss", eval_loss, on_step=False, on_epoch=True, prog_bar=True)
-        return
+        step_output = {"batch_dict": batch_dict}
 
     def on_validation_epoch_end(self) -> None:
         """Lightning hook that is called when a validation epoch ends."""

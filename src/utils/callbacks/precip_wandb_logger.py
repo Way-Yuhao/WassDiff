@@ -28,9 +28,12 @@ class PrecipDataLogger(Callback):
 
     def on_train_batch_end(self, trainer: Trainer, pl_module: LightningModule,
                            outputs: Any, batch: Any, batch_idx: int) -> None:
-        self._log_score(pl_module, outputs)
+        if trainer.global_step % self.train_log_score_freq == 0:
+            self._log_score(pl_module, outputs)
+        return
 
-    def _log_score(self, pl_module: LightningModule, outputs: Dict[str, torch.Tensor]):
+    @staticmethod
+    def _log_score(pl_module: LightningModule, outputs: Dict[str, torch.Tensor]):
         s = pl_module.model_config.sampling.sampling_batch_size
         condition = outputs['condition']
         context_mask = outputs['context_mask']
@@ -38,24 +41,19 @@ class PrecipDataLogger(Callback):
         batch_dict = outputs['batch_dict']
         step = pl_module.global_step
         config = pl_module.model_config
-        gt = outputs['gt']
+        gt = outputs['batch_dict']['precip_gt']
 
         if pl_module.model_config.data.condition_mode == 1:
             wandb_display_grid(condition, log_key='train_score/condition', caption='condition', step=step, ncol=s)
         elif config.data.condition_mode in [2, 3]:
             wandb_display_grid(batch_dict['precip_up'], log_key='train_score/condition',
-                               caption='low_res upsampled',
-                               step=step, ncol=s)
+                               caption='low_res upsampled', step=step, ncol=s)
         elif config.data.condition_mode in [4, 5]:
             wandb_display_grid(batch_dict['precip_masked'], log_key='train_score/condition',
-                               caption='masked',
-                               step=step, ncol=s)
-        wandb_display_grid(context_mask, log_key='train_score/mask', caption='context_mask', step=step,
-                           ncol=s)
-        wandb_display_grid(loss_dict['score'], log_key='train_score/score', caption='score', step=step,
-                           ncol=s)
-        wandb_display_grid(loss_dict['target'], log_key='train_score/target', caption='target', step=step,
-                           ncol=s)
+                               caption='masked', step=step, ncol=s)
+        wandb_display_grid(context_mask, log_key='train_score/mask', caption='context_mask', step=step, ncol=s)
+        wandb_display_grid(loss_dict['score'], log_key='train_score/score', caption='score', step=step, ncol=s)
+        wandb_display_grid(loss_dict['target'], log_key='train_score/target', caption='target', step=step, ncol=s)
         # wandb_display_grid(loss_dict['noise'], log_key='train_score/noise', caption='noise', step=step, ncol=s)
         wandb_display_grid(loss_dict['perturbed_data'], log_key='train_score/perturbed_data',
                            caption='perturbed_data', step=step, ncol=s)
@@ -63,6 +61,8 @@ class PrecipDataLogger(Callback):
                            caption='denoised_data', step=step, ncol=s)
         wandb_display_grid(loss_dict['error_map'], log_key='train_score/error_map', caption='error_map',
                            step=step, ncol=s)
-        wandb_display_grid(gt, log_key='train_score/gt', caption='gt',
-                           step=step, ncol=s)
+        wandb_display_grid(gt, log_key='train_score/gt', caption='gt', step=step, ncol=s)
         return
+
+    def _log_samples(self, pl_module: LightningModule, batch: Dict[str, torch.Tensor]):
+        pass
