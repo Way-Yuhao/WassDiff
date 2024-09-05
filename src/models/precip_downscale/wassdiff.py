@@ -1,5 +1,5 @@
 from typing import Any, Dict, Tuple
-
+import wandb
 import torch
 from lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
@@ -12,6 +12,7 @@ from src.utils.helper import visualize_batch
 import src.utils.ncsn_utils.sampling as sampling
 from src.models.ncsn import utils as mutils
 from src.utils.ncsn_utils import datasets as datasets
+
 
 
 class WassDiffLitModule(LightningModule):
@@ -185,18 +186,17 @@ class WassDiffLitModule(LightningModule):
         condition, context_mask = self._dropout_condition(condition)
         loss, loss_dict = self.train_step_fn(self.state, gt, condition)
 
-        # TODO log freq?
-        self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        wandb.log({'general/global_step': self.global_step}, step=self.global_step)
+        self.log("train/loss", loss, on_step=True, on_epoch=False, prog_bar=False)
         if self.use_emd:
-            self.log("train/emd_loss", loss_dict['emd_loss'], on_step=False, on_epoch=True, prog_bar=True)
-            self.log("train/score_loss", loss_dict['score_loss'], on_step=False, on_epoch=True, prog_bar=True)
+            self.log("train/emd_loss", loss_dict['emd_loss'], on_step=True, on_epoch=False, prog_bar=False)
+            self.log("train/score_loss", loss_dict['score_loss'], on_step=True, on_epoch=False, prog_bar=False)
         step_output = {"batch_dict": batch_dict, "loss_dict": loss_dict, 'condition': condition,
                        'context_mask': context_mask}
         return step_output
 
     def on_train_epoch_end(self) -> None:
         """Lightning hook that is called when a training epoch ends."""
-        pass
 
     def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
         """Perform a single validation step on a batch of data from the validation set.

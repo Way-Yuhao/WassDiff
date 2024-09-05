@@ -24,6 +24,7 @@ class PrecipDataLogger(Callback):
 
         # to be defined elsewhere
         self.rainfall_dataset = None
+        self.first_samples_logged = False
         return
 
     def _check_frequency(self, check_idx):
@@ -35,7 +36,12 @@ class PrecipDataLogger(Callback):
 
     def on_validation_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
                                 batch: Any, batch_idx: int, dataloader_idx: int = 0) -> None:
-        self._log_samples(pl_module, outputs)
+        if self.show_samples_at_start and not self.first_samples_logged:
+            # self._log_samples(pl_module, outputs)
+            self.first_samples_logged = True
+        elif trainer.global_step % self.train_log_img_freq == 0 and trainer.global_step > 0:
+            # self._log_samples(pl_module, outputs)
+            self.first_samples_logged = True
 
     def on_train_batch_end(self, trainer: Trainer, pl_module: LightningModule,
                            outputs: Any, batch: Any, batch_idx: int) -> None:
@@ -76,6 +82,7 @@ class PrecipDataLogger(Callback):
         return
 
     def _log_samples(self, pl_module: LightningModule, outputs: Dict[str, torch.Tensor]):
+        print('Generating conditional samples...')
         condition = outputs['condition']
         batch_dict = outputs['batch_dict']
         gt = outputs['batch_dict']['precip_gt']
