@@ -16,10 +16,12 @@ class PrecipDataLogger(Callback):
                  train_log_param_freq: int = 1000, show_samples_at_start: bool = False,
                  show_unconditional_samples: bool = False):
         super().__init__()
-        self.train_log_img_freq = train_log_img_freq
-        self.train_log_score_freq = train_log_score_freq
-        self.train_log_param_freq = train_log_param_freq
-        self.show_samples_at_start = show_samples_at_start
+        # self.train_log_img_freq = train_log_img_freq
+        # self.train_log_score_freq = train_log_score_freq
+        # self.train_log_param_freq = train_log_param_freq
+        self.freqs = {'img': train_log_img_freq, 'score': train_log_score_freq, 'param': train_log_param_freq}
+        self.next_log_idx = {'img': 0 if show_samples_at_start else train_log_img_freq, 'score': 0, 'param': 0}
+        # self.show_samples_at_start = show_samples_at_start
         self.show_unconditional_samples = show_unconditional_samples
 
         if self.show_unconditional_samples:
@@ -27,28 +29,29 @@ class PrecipDataLogger(Callback):
 
         # to be defined elsewhere
         self.rainfall_dataset = None
-        self.first_samples_logged = False
+        # self.first_samples_logged = False
         return
 
-    def _check_frequency(self, check_idx):
-        pass
+    def _check_frequency(self, check_idx: int, key: str):
+        if check_idx >= self.next_log_idx[key]:
+            self.next_log_idx[key] += self.freqs[key]
+            return True
+        else:
+            return False
 
     def on_fit_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        wandb.run.summary['logdir'] = trainer.default_root_dir
         self.rainfall_dataset = trainer.datamodule.train_val_dataset
         return
 
     def on_validation_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
                                 batch: Any, batch_idx: int, dataloader_idx: int = 0) -> None:
-        if self.show_samples_at_start and not self.first_samples_logged:
+        if self._check_frequency(trainer.global_step, 'img'):
             self._log_samples(pl_module, outputs)
-            self.first_samples_logged = True
-        elif trainer.global_step % self.train_log_img_freq == 0 and trainer.global_step > 0:
-            self._log_samples(pl_module, outputs)
-            self.first_samples_logged = True
 
     def on_train_batch_end(self, trainer: Trainer, pl_module: LightningModule,
                            outputs: Any, batch: Any, batch_idx: int) -> None:
-        if trainer.global_step % self.train_log_score_freq == 0:
+        if self._check_frequency(trainer.global_step, 'score'):
             self._log_score(pl_module, outputs)
         return
 

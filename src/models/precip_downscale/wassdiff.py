@@ -185,7 +185,9 @@ class WassDiffLitModule(LightningModule):
         condition, context_mask = self._dropout_condition(condition)
         loss, loss_dict = self.train_step_fn(self.state, gt, condition)
 
-        wandb.log({'general/global_step': self.global_step}, step=self.global_step)
+        if self.logger.experiment.step < self.global_step:
+            wandb.log({'general/global_step': self.global_step}, step=self.global_step)
+
         self.log("train/loss", loss, on_step=True, on_epoch=False, prog_bar=False)
         if self.use_emd:
             self.log("train/emd_loss", loss_dict['emd_loss'], on_step=True, on_epoch=False, prog_bar=False)
@@ -207,7 +209,7 @@ class WassDiffLitModule(LightningModule):
         batch_dict, _ = batch  # discard coordinates
         condition, gt = self._generate_condition(batch_dict)
         eval_loss, _ = self.eval_step_fn(self.state, gt, condition)
-        self.log("val/loss", eval_loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val/loss", eval_loss, on_step=False, on_epoch=True, prog_bar=False)
         step_output = {"batch_dict": batch_dict, "condition": condition}
         return step_output
 
