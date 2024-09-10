@@ -7,6 +7,7 @@ import warnings
 import functools
 import time
 import datetime as dt
+import rootutils
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
@@ -28,8 +29,9 @@ from torchsummary import summary
 from collections import OrderedDict
 import torch.nn as nn
 
+rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
-
+slack_alert_msg_printed = False
 NUM_CLASSES = 6  # including y=0 (cloud)
 VALIDATION_SPLIT = 0.2  # percentage of training data reserved for validation
 VIS_PARAM = {
@@ -339,12 +341,12 @@ def alert(message):
     global slack_alert_msg_printed  # print out error msg only once
     path_to_restore = os.getcwd()
     os.chdir(os.path.dirname(os.path.realpath(__file__)))
-    load_dotenv('../env/.env')
+    load_dotenv('.env')
     os.chdir(path_to_restore)
     webhook_url = os.getenv('SLACK_WEBHOOK_URL')
     if webhook_url is None:
         if not slack_alert_msg_printed:
-            msg = 'To send alerts to slack, set SLACK_WEBHOOK_URL in ./env/.env file.'
+            msg = 'To send alerts to slack, set SLACK_WEBHOOK_URL in .env file under project root directory.'
             yprint(msg)  # Assuming yprint is a typo and meant print. Adjust as necessary for your logging method.
             yprint('Message routed to stdout')
             slack_alert_msg_printed = True  # Mark the warning as printed

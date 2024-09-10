@@ -197,8 +197,8 @@ class WassDiffLitModule(LightningModule):
                        'context_mask': context_mask}
         return step_output
 
-    def on_train_epoch_end(self) -> None:
-        """Lightning hook that is called when a training epoch ends."""
+    # def on_train_epoch_end(self) -> None:
+    #     """Lightning hook that is called when a training epoch ends."""
 
     def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
         """Perform a single validation step on a batch of data from the validation set.
@@ -215,9 +215,9 @@ class WassDiffLitModule(LightningModule):
         step_output = {"batch_dict": batch_dict, "condition": condition}
         return step_output
 
-    def on_validation_epoch_end(self) -> None:
-        """Lightning hook that is called when a validation epoch ends."""
-        pass
+    # def on_validation_epoch_end(self) -> None:
+    #     """Lightning hook that is called when a validation epoch ends."""
+    #     pass
 
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
         """Perform a single test step on a batch of data from the test set.
