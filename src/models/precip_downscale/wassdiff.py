@@ -140,7 +140,6 @@ class WassDiffLitModule(LightningModule):
         self.sampling_null_condition = self._generate_null_condition()
         self.state['optimizer'] = self.optimizers()  # TODO: verify
 
-
     def on_train_batch_start(self, batch, batch_idx) -> None:
         batch, _ = batch  # discard coordinates
         # visualize the first batch in logger
@@ -257,24 +256,24 @@ class WassDiffLitModule(LightningModule):
         if self.model_config.data.condition_mode == 0:
             raise AttributeError()  # deprecated
         elif self.model_config.data.condition_mode == 1:
-            condition = batch_dict['precip_up']  #.to(config.device)
+            condition = batch_dict['precip_up']
         elif self.model_config.data.condition_mode in [2, 6]:
             exclude_keys = ['precip_lr', 'precip_gt']
             tensors_to_stack = [tensor for key, tensor in batch_dict.items() if key not in exclude_keys]
             stacked_tensor = torch.cat(tensors_to_stack, dim=1)
-            condition = stacked_tensor  #.to(config.device)
+            condition = stacked_tensor
         elif self.model_config.data.condition_mode == 3:
             exclude_keys = ['precip_lr', 'precip_gt', 'precip_up']
             tensors_to_stack = [tensor for key, tensor in batch_dict.items() if key not in exclude_keys]
             stacked_tensor = torch.cat(tensors_to_stack, dim=1)
-            condition = stacked_tensor  #.to(config.device)
+            condition = stacked_tensor
         elif self.model_config.data.condition_mode == 4:
-            condition = batch_dict['precip_masked']  #.to(config.device)
+            condition = batch_dict['precip_masked']
         elif self.model_config.data.condition_mode == 5:
             exclude_keys = ['precip_gt', 'mask']
             tensors_to_stack = [tensor for key, tensor in batch_dict.items() if key not in exclude_keys]
             stacked_tensor = torch.cat(tensors_to_stack, dim=1)
-            condition = stacked_tensor  #.to(config.device)
+            condition = stacked_tensor
         else:
             raise AttributeError()
         return condition, y
