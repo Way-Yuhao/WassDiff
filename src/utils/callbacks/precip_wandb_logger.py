@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 import torch
 import torch.nn.functional as F
 from torchvision.utils import make_grid
@@ -134,7 +134,7 @@ class PrecipDataLogger(Callback):
 
     @staticmethod
     def log_conditional_samples_scaled(input_row: torch.Tensor, output_row: torch.Tensor, gt_row: torch.Tensor, n: int,
-                                       step: int, epoch: int):
+                                       step: Optional[int] = None, epoch: Optional[int] = None):
         input_row = input_row[0:n, :, :, :]
         output_row = output_row[0:n, :, :, :]
         gt_row = gt_row[0:n, :, :, :]
