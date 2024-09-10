@@ -46,6 +46,7 @@ class PrecipDataLogger(Callback):
 
     def on_validation_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
                                 batch: Any, batch_idx: int, dataloader_idx: int = 0) -> None:
+
         if self._check_frequency(trainer.global_step, 'img'):
             self._log_samples(pl_module, outputs)
 
