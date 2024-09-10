@@ -127,7 +127,6 @@ class WassDiffLitModule(LightningModule):
         # Building sampling functions
         sampling_shape = (self.model_config.sampling.sampling_batch_size, self.model_config.data.num_channels,
                           self.model_config.data.image_size, self.model_config.data.image_size)
-        # TODO: verify cuda device
         self.sampling_fn = sampling.get_sampling_fn(self.model_config, sde, sampling_shape, self.inverse_scaler,
                                                     sampling_eps)
         s = self.model_config.sampling.sampling_batch_size
@@ -140,6 +139,7 @@ class WassDiffLitModule(LightningModule):
 
         self.sampling_null_condition = self._generate_null_condition()
         self.state['optimizer'] = self.optimizers()  # TODO: verify
+
 
     def on_train_batch_start(self, batch, batch_idx) -> None:
         batch, _ = batch  # discard coordinates
