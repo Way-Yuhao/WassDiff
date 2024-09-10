@@ -128,12 +128,12 @@ class PrecipDataLogger(Callback):
         grid_mono = grid[0, :, :].unsqueeze(0)
         cm_grid = cm_(grid_mono.detach().cpu(), vmin=0, vmax=max(low_res_display.max(), gt.max()))
         images = wandb.Image(cm_grid, caption='conditional generation [rainfall / output / gt]')
-        wandb.log({"val/conditional_samples": images}, step=pl_module.global_step)
+        wandb.log({"val/conditional_samples": images}) #, step=pl_module.global_step)
         self.log_conditional_samples_scaled(low_res_display, sample, gt, n=s, step=pl_module.global_step)
 
     @staticmethod
     def log_conditional_samples_scaled(input_row: torch.Tensor, output_row: torch.Tensor, gt_row: torch.Tensor, n: int,
-                                       step: int):
+                                       step: int, epoch: int):
         input_row = input_row[0:n, :, :, :]
         output_row = output_row[0:n, :, :, :]
         gt_row = gt_row[0:n, :, :, :]
@@ -160,5 +160,5 @@ class PrecipDataLogger(Callback):
         plt.close(fig)
         # Log the figure to wandb
         images = wandb.Image(fig)
-        wandb.log({"val/conditional_samples_scaled": images}, step=step)
+        wandb.log({"val/conditional_samples_scaled": images})
         return

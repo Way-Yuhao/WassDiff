@@ -326,7 +326,7 @@ def wandb_display_grid(img_tensor, log_key, caption, step, ncol, norm_factor=Non
         grid_mono /= norm_factor
     cm_grid = cm_(grid_mono.detach().cpu())
     images = wandb.Image(cm_grid, caption=caption)
-    wandb.log({log_key: images}, step=step)
+    wandb.log({log_key: images}) #, step=step)
 
 
 def alert(message):
