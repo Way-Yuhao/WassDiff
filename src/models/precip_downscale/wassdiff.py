@@ -48,7 +48,7 @@ class WassDiffLitModule(LightningModule):
         self.sampling_fn = None
 
         # internal flags
-        self.automatic_optimization = False  # TODO verify
+        self.automatic_optimization = False
         self.first_batch_visualized = False
         return
 
@@ -75,7 +75,7 @@ class WassDiffLitModule(LightningModule):
 
         :return: A dict containing the configured optimizers and learning-rate schedulers to be used for training.
         """
-        self.model_config.device = self.device  # TODO: verify
+        self.model_config.device = self.device
 
         # Create data normalizer and its inverse
         self.scaler = datasets.get_data_scaler(self.model_config)
@@ -129,8 +129,8 @@ class WassDiffLitModule(LightningModule):
                           self.model_config.data.image_size, self.model_config.data.image_size)
         self.sampling_fn = sampling.get_sampling_fn(self.model_config, sde, sampling_shape, self.inverse_scaler,
                                                     sampling_eps)
-        s = self.model_config.sampling.sampling_batch_size
-        num_train_steps = self.model_config.training.n_iters
+        # s = self.model_config.sampling.sampling_batch_size
+        # num_train_steps = self.model_config.training.n_iters
 
         return optimizer
 
@@ -271,7 +271,7 @@ class WassDiffLitModule(LightningModule):
         elif self.model_config.data.condition_mode == 4:
             condition = batch_dict['precip_masked']  #.to(config.device)
         elif self.model_config.data.condition_mode == 5:
-            exclude_keys = ['precip_gt', 'mask']  # TODO check if including mask is useful
+            exclude_keys = ['precip_gt', 'mask']
             tensors_to_stack = [tensor for key, tensor in batch_dict.items() if key not in exclude_keys]
             stacked_tensor = torch.cat(tensors_to_stack, dim=1)
             condition = stacked_tensor  #.to(config.device)
@@ -279,7 +279,7 @@ class WassDiffLitModule(LightningModule):
             raise AttributeError()
         return condition, y
 
-    def _dropout_condition(self, condition: torch.Tensor) -> torch.Tensor:
+    def _dropout_condition(self, condition: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         # implement dropout
         context_mask = torch.bernoulli(torch.zeros(condition.shape[0]) + (1 - self.model_config.model.drop_prob))
         context_mask = context_mask[:, None, None, None]  # shape: (batch_size, 1, 1, 1)
