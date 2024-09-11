@@ -12,8 +12,12 @@ from src.utils.helper import visualize_batch
 import src.utils.ncsn_utils.sampling as sampling
 from src.models.ncsn import utils as mutils
 from src.utils.ncsn_utils import datasets as datasets
+# sampling
+from src.utils.ncsn_utils.sampling import ReverseDiffusionPredictor, LangevinCorrector
+import src.utils.ncsn_utils.controllable_generation as controllable_generation
 # debug related imports
-from src.utils.ncsn_utils.utils import restore
+from src.utils.ncsn_utils.utils import restore_checkpoint
+from src.utils.ncsn_utils.losses import get_optimizer
 
 
 class WassDiffLitModule(LightningModule):
@@ -47,11 +51,13 @@ class WassDiffLitModule(LightningModule):
         # attributes to be defined elsewhere
         self.train_step_fn = None
         self.eval_step_fn = None
-        self.sampling_fn = None
+        self.sampling_fn = None  # sampling function used during training (for displaying conditional samples)
+        self.pc_upsampler = None  # sampling function used during inference
 
         # internal flags
         self.automatic_optimization = False
         self.first_batch_visualized = False
+
         return
 
     def setup(self, stage: str) -> None:
@@ -136,6 +142,45 @@ class WassDiffLitModule(LightningModule):
 
         return optimizer
 
+    def configure_sampler(self) -> None:
+        """
+        Configure sampler at inference time.
+        """
+        # FIXME: remove this
+        checkpoint_path = '/home/yl241/models/NCSNPP/wandb/run-20240503_110757-gvq9r51l/checkpoints/checkpoint_21.pth'
+
+        score_model = self.net
+        optimizer = get_optimizer(self.optimizer_config, score_model.parameters())
+        ema = ExponentialMovingAverage(score_model.parameters(),
+                                       decay=self.model_config.model.ema_rate)
+        state = dict(step=0, optimizer=optimizer, model=score_model, ema=ema)
+        state = restore_checkpoint(checkpoint_path, state, self.device)
+        ema.copy_to(score_model.parameters())
+
+        # sigmas = mutils.get_sigmas(self.model_config) # not used here or NCSN codebase
+        self.scaler = datasets.get_data_scaler(self.model_config)
+        self.inverse_scaler = datasets.get_data_inverse_scaler(self.model_config)
+        sde = 'VESDE'  # @param ['VESDE', 'VPSDE', 'subVPSDE'] {"type": "string"}
+        if sde.lower() == 'vesde':
+            sde = sde_lib.VESDE(sigma_min=self.model_config.model.sigma_min,
+                                sigma_max=self.model_config.model.sigma_max,
+                                N=self.model_config.model.num_scales)
+        else:
+            raise NotImplementedError()
+
+        # FIXME: is this used at all?
+        resolution_ratio = int(self.model_config.data.image_size / self.model_config.data.condition_size)
+        predictor = ReverseDiffusionPredictor  # @param ["EulerMaruyamaPredictor", "AncestralSamplingPredictor", "ReverseDiffusionPredictor", "None"] {"type": "raw"}
+        corrector = LangevinCorrector  # @param ["LangevinCorrector", "AnnealedLangevinDynamics", "None"] {"type": "raw"}
+        self.pc_upsampler = controllable_generation.get_pc_cfg_upsampler(sde,
+                                                                    predictor, corrector,
+                                                                    self.inverse_scaler,
+                                                                    snr=self.model_config.sampling.snr,
+                                                                    n_steps=self.model_config.sampling.n_steps_each,
+                                                                    probability_flow=self.model_config.sampling.probability_flow,
+                                                                    continuous=self.model_config.training.continuous,
+                                                                    denoise=True)
+
     def on_fit_start(self) -> None:
         """Lightning hook that is called when the fit begins."""
 
@@ -158,13 +203,9 @@ class WassDiffLitModule(LightningModule):
         """
         return self.net(x)
 
-    def model_step(
-            self, batch: Tuple[torch.Tensor, torch.Tensor]
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def model_step(self, batch: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Perform a single model step on a batch of data.
-
         :param batch: A batch of data (a tuple) containing the input tensor of images and target labels.
-
         :return: A tuple containing (in order):
             - A tensor of losses.
             - A tensor of predictions.
@@ -199,9 +240,6 @@ class WassDiffLitModule(LightningModule):
                        'context_mask': context_mask}
         return step_output
 
-    # def on_train_epoch_end(self) -> None:
-    #     """Lightning hook that is called when a training epoch ends."""
-
     def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
         """Perform a single validation step on a batch of data from the validation set.
 
@@ -217,18 +255,26 @@ class WassDiffLitModule(LightningModule):
         step_output = {"batch_dict": batch_dict, "condition": condition}
         return step_output
 
-    # def on_validation_epoch_end(self) -> None:
-    #     """Lightning hook that is called when a validation epoch ends."""
-    #     pass
+    def on_test_start(self):
+        self.configure_sampler()
 
-    def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
+    def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
         """Perform a single test step on a batch of data from the test set.
 
         :param batch: A batch of data (a tuple) containing the input tensor of images and target
             labels.
         :param batch_idx: The index of the current batch.
         """
-        raise NotImplementedError()
+        batch_dict, _ = batch  # discard coordinates FIXME
+        condition, gt = self._generate_condition(batch_dict)
+        null_condition = torch.ones_like(condition) * self.model_config.model.null_token
+        batch_size = condition.shape[0]
+
+        x = self.pc_upsampler(self.net, self.scaler(condition), w=self.model_config.model.w_guide,
+                              out_dim=(batch_size, 1, self.model_config.data.image_size, self.model_config.data.image_size), save_dir=None,
+                              null_condition=null_condition, gt=gt)  # for vis
+        batch_dict['precip_output'] = x
+        return batch_dict
 
     def on_test_epoch_end(self) -> None:
         """Lightning hook that is called when a test epoch ends."""

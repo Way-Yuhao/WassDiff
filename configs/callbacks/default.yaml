@@ -1,6 +1,6 @@
 defaults:
   - model_checkpoint
-  - early_stopping
+#  - early_stopping
   - model_summary
   - rich_progress_bar
   - log_precip_data
@@ -16,10 +16,10 @@ model_checkpoint:
   save_top_k: 10 # save k best models (determined by above metric)
   every_n_train_steps: 10000
 
-early_stopping:
-  monitor: "val/loss"
-  patience: 100
-  mode: "min"
+#early_stopping:
+#  monitor: "val/loss"
+#  patience: 100
+#  mode: "min"
 
 
 model_summary:

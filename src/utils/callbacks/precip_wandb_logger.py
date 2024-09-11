@@ -8,7 +8,11 @@ from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.utilities.types import STEP_OUTPUT
 import wandb
 from matplotlib import pyplot as plt
+from lightning.pytorch.callbacks import RichProgressBar, Callback
+from rich.progress import Progress
 from src.utils.helper import wandb_display_grid, cm_
+# debug imports
+import time
 
 
 class PrecipDataLogger(Callback):
@@ -29,6 +33,8 @@ class PrecipDataLogger(Callback):
 
         # to be defined elsewhere
         self.rainfall_dataset = None
+        self.progress_bar = None
+        self.sampling_pbar_desc = 'Sampling on validation set...'
         # self.first_samples_logged = False
         return
 
@@ -42,19 +48,23 @@ class PrecipDataLogger(Callback):
     def on_fit_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         wandb.run.summary['logdir'] = trainer.default_root_dir
         self.rainfall_dataset = trainer.datamodule.train_val_dataset
+
+        for callback in trainer.callbacks:
+            if isinstance(callback, RichProgressBar):
+                self.progress_bar = callback
+                break
         return
 
     def on_validation_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
                                 batch: Any, batch_idx: int, dataloader_idx: int = 0) -> None:
 
         if self._check_frequency(trainer.global_step, 'img'):
-            self._log_samples(pl_module, outputs)
+            self._log_samples(trainer, pl_module, outputs)
 
     def on_train_batch_end(self, trainer: Trainer, pl_module: LightningModule,
                            outputs: Any, batch: Any, batch_idx: int) -> None:
         if self._check_frequency(trainer.global_step, 'score'):
             self._log_score(pl_module, outputs)
-        return
 
     @staticmethod
     def _log_score(pl_module: LightningModule, outputs: Dict[str, torch.Tensor]):
@@ -88,8 +98,9 @@ class PrecipDataLogger(Callback):
         wandb_display_grid(gt, log_key='train_score/gt', caption='gt', step=step, ncol=s)
         return
 
-    def _log_samples(self, pl_module: LightningModule, outputs: Dict[str, torch.Tensor]):
-        print('Generating conditional samples...')
+    def _log_samples(self, trainer: Trainer, pl_module: LightningModule, outputs: Dict[str, torch.Tensor]):
+        pbar_taskid, original_pbar_desc = self._modify_pbar_desc()
+
         condition = outputs['condition']
         batch_dict = outputs['batch_dict']
         gt = outputs['batch_dict']['precip_gt']
@@ -131,6 +142,9 @@ class PrecipDataLogger(Callback):
         wandb.log({"val/conditional_samples": images}) #, step=pl_module.global_step)
         self.log_conditional_samples_scaled(low_res_display, sample, gt, n=s)
 
+        self._revert_pbar_desc(pbar_taskid, original_pbar_desc)
+        return
+
     @staticmethod
     def log_conditional_samples_scaled(input_row: torch.Tensor, output_row: torch.Tensor, gt_row: torch.Tensor, n: int,
                                        step: Optional[int] = None, epoch: Optional[int] = None):
@@ -161,4 +175,29 @@ class PrecipDataLogger(Callback):
         # Log the figure to wandb
         images = wandb.Image(fig)
         wandb.log({"val/conditional_samples_scaled": images})
+        return
+
+    def _modify_pbar_desc(self):
+        task_id, original_description = None, None
+        # Ensure progress bar is active and tasks are initialized
+        if self.progress_bar.progress is not None and len(self.progress_bar.progress.tasks) > 0:
+            # Look for the current validation task
+            for task in self.progress_bar.progress.tasks:
+                if "Validation" in task.description or "Sanity Checking" in task.description:
+                    task_id = task.id
+                    original_description = task.description
+                    # Update the description of the active validation progress bar
+                    self.progress_bar.progress.update(task_id, description=self.sampling_pbar_desc)
+                    self.progress_bar.progress.refresh()
+        return task_id, original_description
+
+    def _revert_pbar_desc(self, task_id, original_description):
+        # Ensure progress bar is active and tasks are initialized
+        if self.progress_bar.progress is not None and len(self.progress_bar.progress.tasks) > 0:
+            # Look for the current validation task
+            for task in self.progress_bar.progress.tasks:
+                if task.id == task_id:
+                    # Update the description of the active validation progress bar
+                    self.progress_bar.progress.update(task_id, description=original_description)
+                    self.progress_bar.progress.refresh()
         return
