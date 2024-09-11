@@ -1,18 +1,28 @@
 # @package _global_
 
 defaults:
-  - _self_
-  - data: mnist # choose datamodule with `test_dataloader()` for evaluation
-  - model: mnist
+#  - _self_
+  - data: cpc_mrms_data # choose datamodule with `test_dataloader()` for evaluation
+  - model: wassdiff
   - logger: null
   - trainer: default
   - paths: default
   - extras: default
   - hydra: default
+  - _self_
 
 task_name: "eval"
 
 tags: ["dev"]
 
 # passing checkpoint path is necessary for evaluation
-ckpt_path: ???
+ckpt_path: /home/yl241/models/WassDiff-LiT/2024-09-05_20-56-22/checkpoints/epoch_740.ckpt
+#ckpt_path: 'NOT_A_PATH'
+# debug
+data:
+  dataloader_mode: specify_eval
+  num_samples: 1
+  specify_eval_targets:
+    - date: '20150618'
+      lon: 265
+      lat: 36

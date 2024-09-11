@@ -47,7 +47,7 @@ class PrecipDataLogger(Callback):
 
     def on_fit_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         wandb.run.summary['logdir'] = trainer.default_root_dir
-        self.rainfall_dataset = trainer.datamodule.train_val_dataset
+        self.rainfall_dataset = trainer.datamodule.precip_dataset
 
         for callback in trainer.callbacks:
             if isinstance(callback, RichProgressBar):

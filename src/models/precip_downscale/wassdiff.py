@@ -146,16 +146,17 @@ class WassDiffLitModule(LightningModule):
         """
         Configure sampler at inference time.
         """
-        # FIXME: remove this
-        checkpoint_path = '/home/yl241/models/NCSNPP/wandb/run-20240503_110757-gvq9r51l/checkpoints/checkpoint_21.pth'
+        # # FIXME: remove this
+        # checkpoint_path = '/home/yl241/models/NCSNPP/wandb/run-20240503_110757-gvq9r51l/checkpoints/checkpoint_21.pth'
 
         score_model = self.net
-        optimizer = get_optimizer(self.optimizer_config, score_model.parameters())
-        ema = ExponentialMovingAverage(score_model.parameters(),
-                                       decay=self.model_config.model.ema_rate)
-        state = dict(step=0, optimizer=optimizer, model=score_model, ema=ema)
-        state = restore_checkpoint(checkpoint_path, state, self.device)
-        ema.copy_to(score_model.parameters())
+        # FIXME: enable those lines
+        # optimizer = get_optimizer(self.optimizer_config, score_model.parameters())
+        # ema = ExponentialMovingAverage(score_model.parameters(),
+        #                                decay=self.model_config.model.ema_rate)
+        # state = dict(step=0, optimizer=optimizer, model=score_model, ema=ema)
+        # state = restore_checkpoint(checkpoint_path, state, self.device)
+        # ema.copy_to(score_model.parameters())
 
         # sigmas = mutils.get_sigmas(self.model_config) # not used here or NCSN codebase
         self.scaler = datasets.get_data_scaler(self.model_config)
@@ -265,7 +266,7 @@ class WassDiffLitModule(LightningModule):
             labels.
         :param batch_idx: The index of the current batch.
         """
-        batch_dict, _ = batch  # discard coordinates FIXME
+        batch_dict, batch_coords, xr_low_res_batch, valid_mask = batch  # discard coordinates FIXME
         condition, gt = self._generate_condition(batch_dict)
         null_condition = torch.ones_like(condition) * self.model_config.model.null_token
         batch_size = condition.shape[0]
@@ -324,6 +325,7 @@ class WassDiffLitModule(LightningModule):
             condition = stacked_tensor
         else:
             raise AttributeError()
+        # if condition has shape [m, x, y], expand to [1,
         return condition, y
 
     def _dropout_condition(self, condition: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:

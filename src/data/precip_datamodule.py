@@ -5,6 +5,7 @@ from lightning import LightningDataModule
 from torch.utils.data import ConcatDataset, DataLoader, Dataset, random_split, SubsetRandomSampler
 from hydra import compose, initialize
 from src.data.cpc_mrms_dataset import DailyAggregateRainfallDataset
+from src.data.precip_dataloader_inference import RainfallDatasetInference, xarray_collate_fn
 
 
 class PrecipDataModule(LightningDataModule):
@@ -45,13 +46,8 @@ class PrecipDataModule(LightningDataModule):
         https://lightning.ai/docs/pytorch/latest/data/datamodule.html
     """
 
-    def __init__(self,
-                 data_config: dict,
-                 batch_size: int = 12,
-                 num_workers: int = 1,
-                 pin_memory: bool = False,
-                 seed: int = 42
-                 ) -> None:
+    def __init__(self, data_config: dict, batch_size: int = 12, num_workers: int = 1, pin_memory: bool = False,
+                 seed: int = 42, dataloader_mode: Optional[str] = None, *args, **kwargs) -> None:
         """Initialize a `PrecipDataModule`.
         :param batch_size: The batch size. Defaults to `64`.
         :param num_workers: The number of workers. Defaults to `0`.
@@ -62,11 +58,17 @@ class PrecipDataModule(LightningDataModule):
         # allows to access init params with 'self.hparams' attribute; also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False, ignore=("data_config",))
         self.data_config = data_config
+        # self.dataloader_mode = dataloader_mode
+        # self.use_test_samples_from = use_test_samples_from
 
+        # attributes to be defined elsewhere
+        self.precip_dataset: Optional[Dataset] = None
         self.train_sampler: Optional[SubsetRandomSampler] = None
         self.val_sampler: Optional[SubsetRandomSampler] = None
         self.train_loader: Optional[DataLoader] = None
         self.val_loader: Optional[DataLoader] = None
+        self.test_loader: Optional[DataLoader] = None
+
         return
 
     def prepare_data(self) -> None:
@@ -92,14 +94,21 @@ class PrecipDataModule(LightningDataModule):
 
         if self.data_config.uniform_dequantization:
             raise NotImplementedError('Uniform dequantization not yet supported.')
-        self.train_val_dataset = DailyAggregateRainfallDataset(self.data_config)
-        dataset_size = len(self.train_val_dataset)
-        indices = list(range(dataset_size))
-        split = int(np.floor(self.data_config.train_val_split * dataset_size))
-        train_indices, val_indices = indices[split:], indices[:split]
-        generator = torch.Generator().manual_seed(self.hparams.seed)
-        self.train_sampler = SubsetRandomSampler(train_indices, generator=generator)
-        self.val_sampler = SubsetRandomSampler(val_indices, generator=generator)
+
+        if self.hparams.dataloader_mode in ['train', 'eval_set_random']:
+            self.precip_dataset = DailyAggregateRainfallDataset(self.data_config)
+            dataset_size = len(self.precip_dataset)
+            indices = list(range(dataset_size))
+            split = int(np.floor(self.data_config.train_val_split * dataset_size))
+            train_indices, val_indices = indices[split:], indices[:split]
+            generator = torch.Generator().manual_seed(self.hparams.seed)
+            self.train_sampler = SubsetRandomSampler(train_indices, generator=generator)
+            self.val_sampler = SubsetRandomSampler(val_indices, generator=generator)
+        elif self.hparams.dataloader_mode == 'specify_eval':
+            self.precip_dataset = RainfallDatasetInference(self.data_config, self.hparams.dataloader_mode,
+                                                           self.hparams.specify_eval_targets)
+        elif self.hparams.dataloader_mode == 'eval_set_deterministic':
+            raise NotImplementedError()
         return
 
     def train_dataloader(self) -> DataLoader[Any]:
@@ -107,13 +116,12 @@ class PrecipDataModule(LightningDataModule):
 
         :return: The train dataloader.
         """
-        self.train_loader = DataLoader(self.train_val_dataset,
+        self.train_loader = DataLoader(self.precip_dataset,
                                        batch_size=self.hparams.batch_size,
                                        num_workers=self.hparams.num_workers,
                                        sampler=self.train_sampler,
                                        pin_memory=self.hparams.pin_memory,
-                                       timeout=3600,
-                                       )
+                                       timeout=3600)
         return self.train_loader
 
     def val_dataloader(self) -> DataLoader[Any]:
@@ -121,7 +129,7 @@ class PrecipDataModule(LightningDataModule):
 
         :return: The validation dataloader.
         """
-        self.val_loader = DataLoader(self.train_val_dataset,
+        self.val_loader = DataLoader(self.precip_dataset,
                                      batch_size=self.hparams.batch_size,
                                      timeout=3600,  # 120,
                                      num_workers=self.hparams.num_workers,  # TODO: specify num_workers for val
@@ -133,7 +141,19 @@ class PrecipDataModule(LightningDataModule):
 
         :return: The test dataloader.
         """
-        raise NotImplementedError()
+        assert self.hparams.dataloader_mode in ['specify_eval', 'eval_set_random', 'eval_set_deterministic']
+        if self.hparams.dataloader_mode == 'specify_eval':
+            self.test_loader = DataLoader(self.precip_dataset,
+                                          batch_size=self.hparams.num_samples,
+                                          timeout=0,
+                                          num_workers=1,
+                                          collate_fn=xarray_collate_fn)
+        elif self.hparams.dataloader_mode == 'eval_set_random':
+            raise NotImplementedError()
+        else:
+            raise NotImplementedError()
+
+        return self.test_loader
 
     def teardown(self, stage: Optional[str] = None) -> None:
         """Lightning hook for cleaning up after `trainer.fit()`, `trainer.validate()`,
@@ -171,4 +191,3 @@ if __name__ == "__main__":
     # Get the first batch
     first_batch = next(iter(train_loader))
     print(f"First batch: {first_batch}")
-
