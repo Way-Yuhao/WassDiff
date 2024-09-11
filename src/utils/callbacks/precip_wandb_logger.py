@@ -11,8 +11,6 @@ from matplotlib import pyplot as plt
 from lightning.pytorch.callbacks import RichProgressBar, Callback
 from rich.progress import Progress
 from src.utils.helper import wandb_display_grid, cm_
-# debug imports
-import time
 
 
 class PrecipDataLogger(Callback):

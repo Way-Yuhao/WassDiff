@@ -144,7 +144,7 @@ class PrecipDataModule(LightningDataModule):
         assert self.hparams.dataloader_mode in ['specify_eval', 'eval_set_random', 'eval_set_deterministic']
         if self.hparams.dataloader_mode == 'specify_eval':
             self.test_loader = DataLoader(self.precip_dataset,
-                                          batch_size=self.hparams.num_samples,
+                                          batch_size=1,
                                           timeout=0,
                                           num_workers=1,
                                           collate_fn=xarray_collate_fn)

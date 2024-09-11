@@ -24,13 +24,8 @@ class WassDiffLitModule(LightningModule):
     """
     """
 
-    def __init__(self,
-                 # optimizer: torch.optim.Optimizer,
-                 # scheduler: torch.optim.lr_scheduler,
-                 compile: bool,
-                 model_config: dict,
-                 optimizer_config: dict,
-                 ) -> None:
+    def __init__(self, model_config: dict, optimizer_config: dict,
+                 compile: bool, num_samples: int = 1) -> None:
         """Initialize a `WassDiffLitModule`.
 
         :param net: The model to train.
@@ -174,13 +169,13 @@ class WassDiffLitModule(LightningModule):
         predictor = ReverseDiffusionPredictor  # @param ["EulerMaruyamaPredictor", "AncestralSamplingPredictor", "ReverseDiffusionPredictor", "None"] {"type": "raw"}
         corrector = LangevinCorrector  # @param ["LangevinCorrector", "AnnealedLangevinDynamics", "None"] {"type": "raw"}
         self.pc_upsampler = controllable_generation.get_pc_cfg_upsampler(sde,
-                                                                    predictor, corrector,
-                                                                    self.inverse_scaler,
-                                                                    snr=self.model_config.sampling.snr,
-                                                                    n_steps=self.model_config.sampling.n_steps_each,
-                                                                    probability_flow=self.model_config.sampling.probability_flow,
-                                                                    continuous=self.model_config.training.continuous,
-                                                                    denoise=True)
+                                                                         predictor, corrector,
+                                                                         self.inverse_scaler,
+                                                                         snr=self.model_config.sampling.snr,
+                                                                         n_steps=self.model_config.sampling.n_steps_each,
+                                                                         probability_flow=self.model_config.sampling.probability_flow,
+                                                                         continuous=self.model_config.training.continuous,
+                                                                         denoise=True)
 
     def on_fit_start(self) -> None:
         """Lightning hook that is called when the fit begins."""
@@ -268,14 +263,26 @@ class WassDiffLitModule(LightningModule):
         """
         batch_dict, batch_coords, xr_low_res_batch, valid_mask = batch  # discard coordinates FIXME
         condition, gt = self._generate_condition(batch_dict)
+
+        # ensemble prediction, if needed
+        condition = condition.repeat(self.hparams.num_samples, 1, 1, 1)
+
         null_condition = torch.ones_like(condition) * self.model_config.model.null_token
         batch_size = condition.shape[0]
 
         x = self.pc_upsampler(self.net, self.scaler(condition), w=self.model_config.model.w_guide,
-                              out_dim=(batch_size, 1, self.model_config.data.image_size, self.model_config.data.image_size), save_dir=None,
+                              out_dim=(batch_size, 1, self.model_config.data.image_size, self.model_config.data.image_size),
+                              save_dir=None,
                               null_condition=null_condition, gt=gt)  # for vis
-        batch_dict['precip_output'] = x
-        return batch_dict
+        if self.hparams.num_samples == 1:
+            batch_dict['precip_output'] = x
+        else:
+            for i in range(self.hparams.num_samples):
+                batch_dict['precip_output_' + str(i)] = x[i, :, :, :]
+
+        return {'batch_dict': batch_dict, 'batch_coords': batch_coords, 'xr_low_res_batch': xr_low_res_batch,
+                'valid_mask': valid_mask}
+
 
     def on_test_epoch_end(self) -> None:
         """Lightning hook that is called when a test epoch ends."""

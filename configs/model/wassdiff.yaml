@@ -1,5 +1,7 @@
 _target_: src.models.precip_downscale.wassdiff.WassDiffLitModule
+
 compile: false
+num_samples: 1 # inference
 
 optimizer_config:
   optim:

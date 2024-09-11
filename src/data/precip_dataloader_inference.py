@@ -17,6 +17,14 @@ class RainfallDatasetInference(DailyAggregateRainfallDataset):
         assert self.dataloader_mode in ['specify_eval', 'eval_set_random', 'eval_set_deterministic']
         return
 
+    def __len__(self):
+        if self.dataloader_mode == 'specify_eval':
+            return len(self.specify_eval_targets)
+        elif self.dataloader_mode == 'eval_set_random':
+            raise NotImplementedError()
+        else:
+            raise NotImplementedError
+
     def get_item_specified(self, item: int):
         date_ = self.specify_eval_targets[item]['date']
         lon = self.specify_eval_targets[item]['lon']
