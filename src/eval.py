@@ -1,5 +1,5 @@
+import os
 from typing import Any, Dict, List, Tuple
-
 import hydra
 import rootutils
 from lightning import Callback, LightningDataModule, LightningModule, Trainer
@@ -104,9 +104,7 @@ def main(cfg: DictConfig) -> None:
     :param cfg: DictConfig configuration composed by Hydra.
     """
     # apply extra utilities
-    # (e.g. ask for tags if none are provided in cfg, print cfg tree, etc.)
-    extras(cfg)
-
+    extras(cfg)  # (e.g. ask for tags if none are provided in cfg, print cfg tree, etc.)
     evaluate(cfg)
 
 

@@ -22,9 +22,9 @@ ckpt_path: null
 
 data:
   dataloader_mode: specify_eval
-  batch_size: 5
+  batch_size: 1  # DO NOT MODIFY
   data_config:
-    image_size: 512
+    image_size: 256 # 512
   specify_eval_targets:
     - date: '20150618'
       lon: 265
@@ -34,6 +34,8 @@ model:
   num_samples: 1
   pytorch_ckpt_path: /home/yl241/models/NCSNPP/wandb/run-20240503_110757-gvq9r51l/checkpoints/checkpoint_21.pth
 
-callbacks:
-  save_xarray_results:
-    save_dir: /home/yl241/data/rainfall_plots_LiT/WassDiff_torch_LiT_script
+paths:
+  output_dir: /home/yl241/data/rainfall_plots_LiT/logger_debug_3
+  log_dir: ${paths.output_dir}
+
+

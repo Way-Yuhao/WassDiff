@@ -44,7 +44,7 @@ class SaveXarrayResults(Callback):
         rainfall_vis_max = self.get_rainfall_vis_max(xr_low_res_batch)
         self.rainfall_dataset.plot_composite_xarray_batch(xr_low_res_batch, rainfall_vis_max=rainfall_vis_max,
                                                           save_dir=self.save_dir, use_upsampled=False, save_netcdf=True)
-        print(f'Low-res Xarray images saved to {self.save_dir}')
+        # print(f'Low-res Xarray images saved to {self.save_dir}')
         return
 
     def on_test_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
@@ -59,7 +59,7 @@ class SaveXarrayResults(Callback):
         # following step rescales output back to mm/day
         self.rainfall_dataset.plot_tensor_batch(batch_dict, batch_coords, rainfall_vis_max=rainfall_vis_max,
                                                 save_dir=self.save_dir, save_netcdf=True)
-        print(f'High-res outputs saved to {self.save_dir}')
+        # print(f'High-res outputs saved to {self.save_dir}')
         self.run_eval_metrics(batch_dict)
         return
 
