@@ -1,4 +1,4 @@
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Optional
 import wandb
 import torch
 from lightning import LightningModule
@@ -18,6 +18,7 @@ import src.utils.ncsn_utils.controllable_generation as controllable_generation
 # debug related imports
 from src.utils.ncsn_utils.utils import restore_checkpoint
 from src.utils.ncsn_utils.losses import get_optimizer
+from src.utils.helper import yprint
 
 
 class WassDiffLitModule(LightningModule):
@@ -25,7 +26,7 @@ class WassDiffLitModule(LightningModule):
     """
 
     def __init__(self, model_config: dict, optimizer_config: dict,
-                 compile: bool, num_samples: int = 1) -> None:
+                 compile: bool, num_samples: int = 1, pytorch_ckpt_path: Optional[str] = None) -> None:
         """Initialize a `WassDiffLitModule`.
 
         :param net: The model to train.
@@ -141,17 +142,16 @@ class WassDiffLitModule(LightningModule):
         """
         Configure sampler at inference time.
         """
-        # # FIXME: remove this
-        # checkpoint_path = '/home/yl241/models/NCSNPP/wandb/run-20240503_110757-gvq9r51l/checkpoints/checkpoint_21.pth'
-
-        score_model = self.net
-        # FIXME: enable those lines
-        # optimizer = get_optimizer(self.optimizer_config, score_model.parameters())
-        # ema = ExponentialMovingAverage(score_model.parameters(),
-        #                                decay=self.model_config.model.ema_rate)
-        # state = dict(step=0, optimizer=optimizer, model=score_model, ema=ema)
-        # state = restore_checkpoint(checkpoint_path, state, self.device)
-        # ema.copy_to(score_model.parameters())
+        # TODO: verify
+        if self.hparams.pytorch_ckpt_path is not None:
+            score_model = self.net
+            optimizer = get_optimizer(self.optimizer_config, score_model.parameters())
+            ema = ExponentialMovingAverage(score_model.parameters(),
+                                           decay=self.model_config.model.ema_rate)
+            state = dict(step=0, optimizer=optimizer, model=score_model, ema=ema)
+            state = restore_checkpoint(self.hparams.pytorch_ckpt_path, state, self.device)
+            ema.copy_to(score_model.parameters())
+            yprint(f"Restored model from Pytorch ckpt: {self.hparams.pytorch_ckpt_path}")
 
         # sigmas = mutils.get_sigmas(self.model_config) # not used here or NCSN codebase
         self.scaler = datasets.get_data_scaler(self.model_config)

@@ -1,7 +1,6 @@
 # @package _global_
 
 defaults:
-#  - _self_
   - data: cpc_mrms_data # choose datamodule with `test_dataloader()` for evaluation
   - model: wassdiff
   - metrics: default
@@ -18,12 +17,13 @@ task_name: "eval"
 tags: ["dev"]
 
 # passing checkpoint path is necessary for evaluation
-ckpt_path: /home/yl241/models/WassDiff-LiT/2024-09-05_20-56-22/checkpoints/epoch_740.ckpt
-#ckpt_path: 'NOT_A_PATH'
+#ckpt_path: /home/yl241/models/WassDiff-LiT/2024-09-05_20-56-22/checkpoints/epoch_740.ckpt
+#ckpt_path: /home/yl241/models/NCSNPP/wandb/run-20240503_110757-gvq9r51l/checkpoints/checkpoint_21.pth
+ckpt_path: null
 # debug
 data:
   dataloader_mode: specify_eval
-  batch_size: 1
+  batch_size: 5
   data_config:
     image_size: 512
   specify_eval_targets:
@@ -32,8 +32,9 @@ data:
       lat: 36
 
 model:
-  num_samples: 2
+  num_samples: 1
+  pytorch_ckpt_path: /home/yl241/models/NCSNPP/wandb/run-20240503_110757-gvq9r51l/checkpoints/checkpoint_21.pth
 
 callbacks:
   save_xarray_results:
-    save_dir: /home/yl241/data/rainfall_plots_LiT/test_example_size_512
+    save_dir: /home/yl241/data/rainfall_plots_LiT/WassDiff_torch_LiT_script
