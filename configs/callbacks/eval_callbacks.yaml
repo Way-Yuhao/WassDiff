@@ -1,0 +1,4 @@
+defaults:
+#  - rich_progress_bar
+  - save_xarray_results
+  - _self_

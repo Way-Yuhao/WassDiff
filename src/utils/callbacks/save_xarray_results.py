@@ -29,11 +29,11 @@ class SaveXarrayResults(Callback):
 
     def on_test_batch_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", batch: Any,
                             batch_idx: int, dataloader_idx: int = 0) -> None:
-        xr_low_res_batch = batch['xr_low_res_batch']
+        batch_dict, batch_coords, xr_low_res_batch, valid_mask = batch
         rainfall_vis_max = self.get_rainfall_vis_max(xr_low_res_batch)
         self.rainfall_dataset.plot_composite_xarray_batch(xr_low_res_batch, rainfall_vis_max=rainfall_vis_max,
                                                           save_dir=self.save_dir, use_upsampled=False, save_netcdf=True)
-        print(f'Low-res inputs saved to {self.save_dir}')
+        print(f'Low-res Xarray images saved to {self.save_dir}')
         return
 
     def on_test_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
@@ -44,7 +44,7 @@ class SaveXarrayResults(Callback):
         valid_mask = outputs['valid_mask']
 
         rainfall_vis_max = self.get_rainfall_vis_max(xr_low_res_batch)
-        self.rainfall_dataset.plot_tensor_batch(batch, batch_coords, rainfall_vis_max=rainfall_vis_max,
+        self.rainfall_dataset.plot_tensor_batch(batch_dict, batch_coords, rainfall_vis_max=rainfall_vis_max,
                                                 save_dir=self.save_dir, save_netcdf=True)
         print(f'High-res outputs saved to {self.save_dir}')
         return

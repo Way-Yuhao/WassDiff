@@ -257,8 +257,7 @@ class WassDiffLitModule(LightningModule):
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
         """Perform a single test step on a batch of data from the test set.
 
-        :param batch: A batch of data (a tuple) containing the input tensor of images and target
-            labels.
+        :param batch: A batch of data (a tuple) containing the input tensor of images and target labels.
         :param batch_idx: The index of the current batch.
         """
         batch_dict, batch_coords, xr_low_res_batch, valid_mask = batch  # discard coordinates FIXME
@@ -272,8 +271,7 @@ class WassDiffLitModule(LightningModule):
 
         x = self.pc_upsampler(self.net, self.scaler(condition), w=self.model_config.model.w_guide,
                               out_dim=(batch_size, 1, self.model_config.data.image_size, self.model_config.data.image_size),
-                              save_dir=None,
-                              null_condition=null_condition, gt=gt)  # for vis
+                              save_dir=None, null_condition=null_condition, gt=gt, display_pbar=True)
         if self.hparams.num_samples == 1:
             batch_dict['precip_output'] = x
         else:
@@ -282,7 +280,6 @@ class WassDiffLitModule(LightningModule):
 
         return {'batch_dict': batch_dict, 'batch_coords': batch_coords, 'xr_low_res_batch': xr_low_res_batch,
                 'valid_mask': valid_mask}
-
 
     def on_test_epoch_end(self) -> None:
         """Lightning hook that is called when a test epoch ends."""

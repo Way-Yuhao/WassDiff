@@ -902,7 +902,7 @@ class DailyAggregateRainfallDataset(Dataset):
             if save_dir is not None:
                 k_ = k + '_lr' if not use_upsampled else k
                 plt.savefig(p.join(save_dir, k_ + '.png'), dpi=600)
-                print('Saved composite plots to {}'.format(save_dir))
+                # print('Saved composite plots to {}'.format(save_dir))
                 if save_netcdf:
                     v.to_netcdf(p.join(save_dir, k_ + '.nc'))
             else:

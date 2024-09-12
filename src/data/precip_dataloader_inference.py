@@ -47,11 +47,11 @@ def xarray_collate_fn(batch):
         # Check if element is an xarray.DataArray
         if isinstance(element[0], xr.DataArray):
             # Leave xarray.DataArray unchanged
-            collated_batch.append(list(element))  # Retain each xarray object as is
+            collated_batch.append(element[0])  # Retain each xarray object as is
         # Check if element is a tuple and the first element is a dict with xr.DataArray values
         elif isinstance(element[0], dict) and all(isinstance(v, xr.DataArray) for v in element[0].values()):
             # Leave the dict of xarray.DataArray unchanged
-            collated_batch.append(list(element))  # Retain the dict unchanged
+            collated_batch.append(element[0])  # Retain the dict unchanged
 
         else:
             # Use default collate for other types
