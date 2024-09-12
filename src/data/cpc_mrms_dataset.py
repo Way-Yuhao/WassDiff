@@ -939,7 +939,8 @@ class DailyAggregateRainfallDataset(Dataset):
                           save_dir: str = None, save_netcdf: bool = False) -> dict:
         """
         Plots the batch of tensors. Requires all elements in batch to be in tensor format.
-        Returns unnormalized xarray batch.
+        Returns xarray batch recaled to mm/day.
+        NOTE: pointer to batch is also rescaled, event without return statement.
         """
         batch = self.inverse_normalize_batch(batch)
         xarray_batch = self.cvt_batch_to_xarray(batch, batch_coords)
