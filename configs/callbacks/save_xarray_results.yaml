@@ -1,3 +1,3 @@
 save_xarray_results:
   _target_: src.utils.callbacks.save_xarray_results.SaveXarrayResults
-  save_dir: /home/yl241/data/rainfall_plots_LiT
+  save_dir: /home/yl241/data/rainfall_plots_LiT/test_example_2

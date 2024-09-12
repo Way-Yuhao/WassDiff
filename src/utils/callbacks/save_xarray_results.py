@@ -13,6 +13,7 @@ from matplotlib import pyplot as plt
 from lightning.pytorch.callbacks import RichProgressBar, Callback
 from rich.progress import Progress
 from src.utils.helper import wandb_display_grid, cm_, move_batch_to_cpu, squeeze_batch, extract_values_from_batch
+# from src.utils.metrics import calc_mae, calc_mse, calc_csi, calc_emd
 
 
 class SaveXarrayResults(Callback):
@@ -24,6 +25,9 @@ class SaveXarrayResults(Callback):
         # to be defined elsewhere
         self.rainfall_dataset = None
         return
+
+    def setup(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", stage: str) -> None:
+        os.makedirs(self.save_dir, exist_ok=True)
 
     def on_test_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         self.rainfall_dataset = trainer.datamodule.precip_dataset
@@ -56,5 +60,33 @@ class SaveXarrayResults(Callback):
         return float(np.floor(xr_low_res_batch['precip_gt'].max().values.item()))
 
 
-
+    # def run_eval_metrics(self, batch: Dict[str, torch.Tensor]):
+    #     print('Running evaluation...')
+    #     output = batch['precip_output'].squeeze(0).cpu().numpy()
+    #     gt = batch['precip_gt'].squeeze(0).cpu().numpy()
+    #     # numeric metrics
+    #     mae = calc_mae(output, gt)
+    #     mse = calc_mse(output, gt)
+    #     csi_score = calc_csi(output, gt, threshold=10)
+    #     emd = calc_emd(output.flatten(), gt.flatten())
+    #     print('mae: ', mae)
+    #     print('mse: ', mse)
+    #     print('csi: ', csi_score)
+    #     print('emd: ', emd)
+    #
+    #     # figures
+    #     plot_psd(output, gt, save_dir)
+    #     plot_distribution(output, gt, save_dir, y_log_scale=False)
+    #     plot_distribution(output, gt, save_dir, y_log_scale=True)
+    #     plot_error_map(output, gt, save_dir)
+    #     plot_qq(output, gt, save_dir)
+    #
+    #     # save metrics
+    #     if save_dir is not None:
+    #         with open(p.join(save_dir, 'summary.txt'), 'a') as f:
+    #             f.write('mae: ' + str(mae) + '\n')
+    #             f.write('mse: ' + str(mse) + '\n')
+    #             f.write('csi: ' + str(csi_score) + '\n')
+    #             f.write('emd: ' + str(emd) + '\n')
+    #     return
 

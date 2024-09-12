@@ -14,19 +14,19 @@ from torchvision import transforms
 from src.utils.pysteps.spatialscores import fss
 from src.utils.pysteps.probscores import CRPS
 from scipy.linalg import sqrtm
-from hydra import initialize, compose
-from hydra.utils import call
+# from hydra import initialize, compose
+# from hydra.utils import call
 import xarray as xr
 import pandas as pd
 import lpips
 from src.utils.helper import time_func, monitor_complete, deprecated
 
 # constants
-with initialize(version_base=None, config_path="../configs"):
-    # Compose the configuration using the config name and any overrides you wish to apply
-    cfg = compose(config_name="downscale_cpc_density")
-mppe_thres = cfg.eval.peak_mesoscale_threshold
-hrre_thres = cfg.eval.heavy_rain_threshold
+# with initialize(version_base=None, config_path="../configs"):
+#     # Compose the configuration using the config name and any overrides you wish to apply
+#     cfg = compose(config_name="downscale_cpc_density")
+# mppe_thres = cfg.eval.peak_mesoscale_threshold
+# hrre_thres = cfg.eval.heavy_rain_threshold
 
 
 def scale_logp1(precip):

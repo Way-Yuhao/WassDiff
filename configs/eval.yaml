@@ -22,7 +22,7 @@ ckpt_path: /home/yl241/models/WassDiff-LiT/2024-09-05_20-56-22/checkpoints/epoch
 # debug
 data:
   dataloader_mode: specify_eval
-  batch_size: 1
+  batch_size: 2
   specify_eval_targets:
     - date: '20150618'
       lon: 265
