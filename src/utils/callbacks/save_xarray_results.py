@@ -14,7 +14,8 @@ from lightning.pytorch.callbacks import RichProgressBar, Callback
 from rich.progress import Progress
 from src.utils.helper import wandb_display_grid, cm_, move_batch_to_cpu, squeeze_batch, extract_values_from_batch
 from src.utils.metrics import calc_mae, calc_mse, calc_csi, calc_emd
-from src.utils.plot_func import plot_psd, plot_distribution, plot_error_map, plot_qq
+from src.utils.plot_func import plot_psd, plot_distribution, plot_error_map, plot_qq, plot_qq_ensemble_2
+
 
 class SaveXarrayResults(Callback):
 
@@ -48,17 +49,12 @@ class SaveXarrayResults(Callback):
 
     def on_test_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
                           batch: Any, batch_idx: int, dataloader_idx: int = 0) -> None:
-
-        # # FIXME: delete those lines
-        # x = torch.
-
         batch_dict = squeeze_batch(move_batch_to_cpu(outputs['batch_dict']), dim=(0, 1))
         batch_coords = extract_values_from_batch(outputs['batch_coords'])
         xr_low_res_batch = outputs['xr_low_res_batch']
         valid_mask = outputs['valid_mask']
 
         rainfall_vis_max = self.get_rainfall_vis_max(xr_low_res_batch)
-        # FIXME: enable this line
         torch.save(batch, p.join(self.save_dir, 'batch.pt'))
         # following step rescales output back to mm/day
         self.rainfall_dataset.plot_tensor_batch(batch_dict, batch_coords, rainfall_vis_max=rainfall_vis_max,
@@ -72,6 +68,13 @@ class SaveXarrayResults(Callback):
         return float(np.floor(xr_low_res_batch['precip_gt'].max().values.item()))
 
     def run_eval_metrics(self, batch: Dict[str, torch.Tensor]):
+        ensemble_size = sum(1 for key in batch if key.startswith('precip_output'))
+        if ensemble_size == 1:
+            self.eval_metrics_single_member(batch)
+        else:
+            self.eval_metrics_ensemble(batch, ensemble_size)
+
+    def eval_metrics_single_member(self, batch: Dict[str, torch.Tensor]):
         print('Calculating metrics...')
         output = batch['precip_output'].squeeze(0).cpu().numpy()
         gt = batch['precip_gt'].squeeze(0).cpu().numpy()
@@ -98,5 +101,49 @@ class SaveXarrayResults(Callback):
             f.write('mse: ' + str(mse) + '\n')
             f.write('csi: ' + str(csi_score) + '\n')
             f.write('emd: ' + str(emd) + '\n')
+        return
+
+    def eval_metrics_ensemble(self, batch: Dict[str, torch.Tensor], ensemble_size: int):
+        print('Calculating metrics for ensemble prediction...')
+        gt = batch['precip_gt'].squeeze(0).cpu().numpy()
+        # numeric metrics
+        maes, mses, csi_scores = [], [], []
+        for i in range(ensemble_size):
+            print('------sample %d------' % i)
+            output = batch['precip_output_' + str(i)].squeeze(0).cpu().numpy()
+            maes.append(calc_mae(output, gt))
+            mses.append(calc_mse(output, gt))
+            csi_scores.append(calc_csi(output, gt, threshold=10))
+            print('mae: ', maes[i])
+            print('mse: ', mses[i])
+            print('csi: ', csi_scores[i])
+        print('------ensemble------')
+        mae = np.mean(maes)
+        mse = np.mean(mses)
+        csi_score = np.mean(csi_scores)
+        print('avg mae: ', mae)
+        print('avg mse: ', mse)
+        print('avg csi: ', csi_score)
+
+        # figures
+        for i in range(ensemble_size):
+            output = batch['precip_output_' + str(i)].squeeze(0).cpu().numpy()
+            plot_distribution(output, gt, self.save_dir, y_log_scale=False, suffix=str(i))
+            plot_distribution(output, gt, self.save_dir, y_log_scale=True, suffix=str(i))
+            plot_error_map(output, gt, self.save_dir, suffix=str(i))
+        # plot_psd_ensemble(batch, ensemble_size, self.save_dir)
+        plot_qq_ensemble_2(batch, ensemble_size, self.save_dir)
+
+        # save metrics
+        with open(p.join(self.save_dir, 'summary.txt'), 'a') as f:
+            f.write('------ensemble------\n')
+            f.write('avg mae: ' + str(mae) + '\n')
+            f.write('avg mse: ' + str(mse) + '\n')
+            f.write('avg csi: ' + str(csi_score) + '\n')
+            for i in range(ensemble_size):
+                f.write('------sample %d------\n' % i)
+                f.write('mae: ' + str(maes[i]) + '\n')
+                f.write('mse: ' + str(mses[i]) + '\n')
+                f.write('csi: ' + str(csi_scores[i]) + '\n')
         return
 

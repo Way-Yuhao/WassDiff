@@ -30,8 +30,8 @@ data:
       lat: 36
 
 model:
-  num_samples: 1
+  num_samples: 2
 
 callbacks:
   save_xarray_results:
-    save_dir: /home/yl241/data/rainfall_plots_LiT/test_example_3
+    save_dir: /home/yl241/data/rainfall_plots_LiT/test_example_4
