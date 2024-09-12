@@ -24,6 +24,8 @@ ckpt_path: /home/yl241/models/WassDiff-LiT/2024-09-05_20-56-22/checkpoints/epoch
 data:
   dataloader_mode: specify_eval
   batch_size: 1
+  data_config:
+    image_size: 512
   specify_eval_targets:
     - date: '20150618'
       lon: 265
@@ -34,4 +36,4 @@ model:
 
 callbacks:
   save_xarray_results:
-    save_dir: /home/yl241/data/rainfall_plots_LiT/test_example_4
+    save_dir: /home/yl241/data/rainfall_plots_LiT/test_example_size_512
