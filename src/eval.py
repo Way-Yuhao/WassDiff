@@ -4,7 +4,7 @@ import hydra
 import rootutils
 from lightning import Callback, LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 # ------------------------------------------------------------------------------------ #
@@ -49,6 +49,15 @@ def evaluate(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
     if not cfg.ckpt_path:
         log.warning("ckpt_path is not defined. Lightning Trainer is not handling checkpointing restoration.")
+
+    # check if model.pytorch_ckpt_path is defined
+    if OmegaConf.select(cfg, "model.pytorch_ckpt_path") and cfg.ckpt_path is not None:
+        log.error('Error: Both `model.pytorch_ckpt_path` and `ckpt_path` are defined. ')
+        return {}, {}
+    elif OmegaConf.select(cfg, "model.pytorch_ckpt_path") is None and not cfg.ckpt_path:
+        log.error('Error: No checkpoint path is defined for either Lightning trainer or vanilla Pytorch. ')
+        return {}, {}
+
 
     log.info(f"Instantiating datamodule <{cfg.data._target_}>")
     datamodule: LightningDataModule = hydra.utils.instantiate(cfg.data)
