@@ -5,6 +5,7 @@ import os
 import traceback
 import warnings
 import functools
+from typing import Dict, List, Tuple, Any, Union
 import time
 import datetime as dt
 import rootutils
@@ -505,3 +506,28 @@ def custom_summary(model, *inputs):
     print("Params size (MB): %0.2f" % total_params_size)
     print("Estimated Total Size (MB): %0.2f" % (total_input_size + total_output_size + total_params_size))
     print("----------------------------------------------------------------")
+
+
+def move_batch_to_cpu(batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    """
+    Moves a dict of tensors from a cuda device to cpu.
+    """
+    return {key: tensor.cpu() for key, tensor in batch.items()}
+
+
+def extract_values_from_batch(batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    """
+    Extracts values from a dict of tensors. Expects each tensor to be of shape [1,]
+    """
+    return {key: tensor.item() for key, tensor in batch.items()}
+
+def squeeze_batch(batch: Dict[str, torch.Tensor], dim: Union[int, Tuple]) -> Dict[str, torch.Tensor]:
+    """
+    Squeezes a dict of tensors.
+    """
+    return {key: torch.squeeze(tensor, dim=dim) for key, tensor in batch.items()}
+
+
+if __name__ == '__main__':
+    a = torch.ones(1, 1, 128, 128)
+    b = torch.ones(1, 1, 128, 128)
