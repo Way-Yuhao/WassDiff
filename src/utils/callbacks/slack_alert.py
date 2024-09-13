@@ -9,7 +9,7 @@ class SlackAlert(Callback):
     Callback for sending a slack alert.
     """
 
-    def __init__(self, exception_only: bool = True):
+    def __init__(self, exception_only: bool = False):
         super().__init__()
         self.exception_only = exception_only  # Flag to indicate if the alert should only be sent on exceptions
         self.pl_module_device = None
