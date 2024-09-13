@@ -8,6 +8,7 @@ from lightning.pytorch.utilities.types import STEP_OUTPUT
 import wandb
 from matplotlib import pyplot as plt
 from lightning.pytorch.callbacks import RichProgressBar, Callback
+from src.utils.helper import yprint
 
 
 class EvalOnDataset(Callback):
@@ -15,10 +16,11 @@ class EvalOnDataset(Callback):
     Callback for evaluating on a specified dataset.
     """
 
-    def __init__(self, save_dir: str, skip_existing: bool):
+    def __init__(self, save_dir: str, skip_existing: bool, eval_only_on_existing: bool):
         super().__init__()
         self.save_dir = save_dir
         self.skip_existing = skip_existing
+        self.eval_only_on_existing = eval_only_on_existing
 
         # to be defined elsewhere
         self.rainfall_dataset = None
@@ -27,11 +29,19 @@ class EvalOnDataset(Callback):
     def on_test_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         self.rainfall_dataset = trainer.datamodule.precip_dataset
 
+        files_ = os.listdir(self.save_dir)
+        existing_outputs = [f for f in files_ if f.endswith('.pt')]
+
+        # evaluate only on existing outputs
+        if self.eval_only_on_existing:
+            # Skip the test loop by setting the number of test batches to zero
+            yprint(f'\nWARNING: self.eval_only_on_existing is enabled. Skipping test loop. '
+                   f'Only evaluating on existing {len(existing_outputs)} batches.\n')
+
+
         # check if save_dir already contains outputs
         if not self.skip_existing:
-            outputs = os.listdir(self.save_dir)
-            outputs = [f for f in outputs if f.endswith('.pt')]
-            if outputs:
+            if existing_outputs:
                 raise ValueError(f"Directory {self.save_dir} already contains outputs. "
                                  f"Please remove them or set skip_existing=True.")
         return
@@ -41,7 +51,10 @@ class EvalOnDataset(Callback):
         """
         Skip batch if it already exists.
         """
-        if os.path.exists(p.join(self.save_dir, f'batch_{batch_idx}.pt')):
+        if self.eval_only_on_existing:
+            pl_module.skip_next_batch = True
+            return
+        elif os.path.exists(p.join(self.save_dir, f'batch_{batch_idx}.pt')):
             print(f"Skipping batch {batch_idx}")
             pl_module.skip_next_batch = True
             return
@@ -58,5 +71,5 @@ class EvalOnDataset(Callback):
         return
 
     def on_test_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        pass  # TODO: implement eval metrics
+        print('HEREEE')
 
