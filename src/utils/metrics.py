@@ -38,6 +38,7 @@ def scale_logp1(precip):
     normalized[~valid_region] = -1
     return normalized
 
+
 def apply_valid_mask(*args, valid_mask: np.ndarray):
     """
     Apply valid mask to all input arrays.
@@ -248,7 +249,7 @@ def calc_fid(gen_images_np, real_images_np, rescale_to_1: bool = False, inceptio
     return fid_score
 
 
-def calc_hrre(output: np.ndarray, gt: np.ndarray):
+def calc_hrre(output: np.ndarray, gt: np.ndarray, hrre_thres: float):
     """
     Heavy rain region error (HRRE) from RainNet
     # TODO

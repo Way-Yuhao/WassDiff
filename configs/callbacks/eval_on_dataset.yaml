@@ -2,4 +2,10 @@ eval_on_dataset:
   _target_: src.utils.callbacks.eval_on_dataset.EvalOnDataset
   save_dir: ${paths.output_dir}
   skip_existing: true
+  show_vis: false
   eval_only_on_existing: true # debug
+
+  # metric-related constants
+  csi_threshold: ${metrics.csi_threshold}
+  heavy_rain_threshold: ${metrics.heavy_rain_threshold}
+  peak_mesoscale_threshold: ${metrics.peak_mesoscale_threshold}
