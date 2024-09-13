@@ -5,7 +5,8 @@ from lightning import LightningDataModule
 from torch.utils.data import ConcatDataset, DataLoader, Dataset, random_split, SubsetRandomSampler
 from hydra import compose, initialize
 from src.data.cpc_mrms_dataset import DailyAggregateRainfallDataset
-from src.data.precip_dataloader_inference import RainfallDatasetInference, xarray_collate_fn
+from src.data.precip_dataloader_inference import (RainfallSpecifiedInference, PreSavedPrecipDataset,
+                                                  xarray_collate_fn, do_nothing_collate_fn)
 
 
 class PrecipDataModule(LightningDataModule):
@@ -105,10 +106,9 @@ class PrecipDataModule(LightningDataModule):
             self.train_sampler = SubsetRandomSampler(train_indices, generator=generator)
             self.val_sampler = SubsetRandomSampler(val_indices, generator=generator)
         elif self.hparams.dataloader_mode == 'specify_eval':
-            self.precip_dataset = RainfallDatasetInference(self.data_config, self.hparams.dataloader_mode,
-                                                           self.hparams.specify_eval_targets)
+            self.precip_dataset = RainfallSpecifiedInference(self.data_config, self.hparams.dataloader_mode)
         elif self.hparams.dataloader_mode == 'eval_set_deterministic':
-            raise NotImplementedError()
+            self.precip_dataset = PreSavedPrecipDataset(self.data_config, self.hparams.use_test_samples_from)
         return
 
     def train_dataloader(self) -> DataLoader[Any]:
@@ -151,7 +151,11 @@ class PrecipDataModule(LightningDataModule):
         elif self.hparams.dataloader_mode == 'eval_set_random':
             raise NotImplementedError()
         else:
-            raise NotImplementedError()
+            self.test_loader = DataLoader(self.precip_dataset,
+                                          batch_size=1,  # hard coded for now
+                                          timeout=0,
+                                          num_workers=1,
+                                          collate_fn=do_nothing_collate_fn)
 
         return self.test_loader
 

@@ -3,21 +3,18 @@ import os.path as p
 from typing import Any, Dict, Optional
 import numpy as np
 import torch
-import torch.nn.functional as F
-from torchvision.utils import make_grid
-from lightning import LightningModule, Trainer
-from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.utilities.types import STEP_OUTPUT
-import wandb
 from matplotlib import pyplot as plt
 from lightning.pytorch.callbacks import RichProgressBar, Callback
-from rich.progress import Progress
-from src.utils.helper import wandb_display_grid, cm_, move_batch_to_cpu, squeeze_batch, extract_values_from_batch
+from src.utils.helper import move_batch_to_cpu, squeeze_batch, extract_values_from_batch
 from src.utils.metrics import calc_mae, calc_mse, calc_csi, calc_emd
 from src.utils.plot_func import plot_psd, plot_distribution, plot_error_map, plot_qq, plot_qq_ensemble_2
 
 
 class SaveXarrayResults(Callback):
+    """
+    Callback for specified evaluation targets, saving the low-res and high-res xarray images to disk.
+    """
 
     def __init__(self, save_dir: str, csi_threshold: int, heavy_rain_threshold: int, peak_mesoscale_threshold: int):
         super().__init__()

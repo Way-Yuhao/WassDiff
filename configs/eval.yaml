@@ -4,7 +4,8 @@ defaults:
   - data: cpc_mrms_data # choose datamodule with `test_dataloader()` for evaluation
   - model: wassdiff
   - metrics: default
-  - callbacks: eval_callbacks
+#  - callbacks: specified_eval
+  - callbacks: eval_on_dataset
   - logger: null
   - trainer: default
   - paths: default
@@ -20,22 +21,37 @@ tags: ["dev"]
 #ckpt_path: /home/yl241/models/WassDiff-LiT/2024-09-05_20-56-22/checkpoints/epoch_740.ckpt
 ckpt_path: null
 
-data:
-  dataloader_mode: specify_eval
-  batch_size: 1  # DO NOT MODIFY
-  data_config:
-    image_size: 256 # 512
-  specify_eval_targets:
-    - date: '20150618'
-      lon: 265
-      lat: 36
-
 model:
   num_samples: 1
   pytorch_ckpt_path: /home/yl241/models/NCSNPP/wandb/run-20240503_110757-gvq9r51l/checkpoints/checkpoint_21.pth
 
+
+#### SPECIFY EVAL MODE ####
+#data:
+#  dataloader_mode: specify_eval
+#  batch_size: 1  # DO NOT MODIFY
+#  data_config:
+#    image_size: 256 # 512
+#  specify_eval_targets:
+#    - date: '20150618'
+#      lon: 265
+#      lat: 36
+#
+#paths:
+#  output_dir: /home/yl241/data/rainfall_plots_LiT/logger_debug_3
+#  log_dir: ${paths.output_dir}
+
+
+
+#### EVAL SET ########
+data:
+  dataloader_mode: eval_set_deterministic
+  use_test_samples_from: /home/yl241/data/rainfall_eval/50_eval_samples_2
+  data_config:
+    image_size: 512
+
 paths:
-  output_dir: /home/yl241/data/rainfall_plots_LiT/logger_debug_3
+  output_dir: /home/yl241/data/rainfall_eval_LiT/start
   log_dir: ${paths.output_dir}
 
 

@@ -264,12 +264,15 @@ class WassDiffLitModule(LightningModule):
         condition, gt = self._generate_condition(batch_dict)
 
         # ensemble prediction, if needed
-        condition = condition.repeat(self.hparams.num_samples, 1, 1, 1)
+        if self.hparams.num_samples > 1 and condition.shape[0] > 1:
+            raise AttributeError('Ensemble prediction not supported for batch size > 1.')
+        elif self.hparams.num_samples > 1 and condition.shape[0] == 1:
+            condition = condition.repeat(self.hparams.num_samples, 1, 1, 1)
 
         null_condition = torch.ones_like(condition) * self.model_config.model.null_token
         batch_size = condition.shape[0]
 
-        # FIXme: enable those lines
+        # Fixme: enable those lines
         x = self.pc_upsampler(self.net, self.scaler(condition), w=self.model_config.model.w_guide,
                               out_dim=(batch_size, 1, self.model_config.data.image_size, self.model_config.data.image_size),
                               save_dir=None, null_condition=null_condition, gt=gt, display_pbar=True)
@@ -278,8 +281,6 @@ class WassDiffLitModule(LightningModule):
         else:
             for i in range(self.hparams.num_samples):
                 batch_dict['precip_output_' + str(i)] = x[i, :, :, :]
-
-
 
         return {'batch_dict': batch_dict, 'batch_coords': batch_coords, 'xr_low_res_batch': xr_low_res_batch,
                 'valid_mask': valid_mask}

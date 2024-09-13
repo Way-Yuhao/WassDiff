@@ -1,43 +1,53 @@
 __author__ = 'yuhao liu'
+
+import os
+import os.path as p
 from typing import Any, Dict, Optional, Tuple, List
+import torch
 from torch.utils.data._utils.collate import default_collate
+from torch.utils.data import Dataset
 import xarray as xr
 from src.data.cpc_mrms_dataset import DailyAggregateRainfallDataset
 
 
-class RainfallDatasetInference(DailyAggregateRainfallDataset):
+class RainfallSpecifiedInference(DailyAggregateRainfallDataset):
+    """
+    Precipitation dataset for inference, where the targets are specified by date, lon, and lat.
+    """
 
     def __init__(self, data_config: dict,
-                 dataloader_mode: Optional[str] = None,
                  specify_eval_targets: Optional[List[Dict[str, Any]]] = None):
         super().__init__(data_config)
-        self.dataloader_mode = dataloader_mode
         self.specify_eval_targets = specify_eval_targets
 
-        assert self.dataloader_mode in ['specify_eval', 'eval_set_random', 'eval_set_deterministic']
-        return
-
     def __len__(self):
-        if self.dataloader_mode == 'specify_eval':
-            return len(self.specify_eval_targets)
-        elif self.dataloader_mode == 'eval_set_random':
-            raise NotImplementedError()
-        else:
-            raise NotImplementedError
+        return len(self.specify_eval_targets)
 
-    def get_item_specified(self, item: int):
+    def __getitem__(self, item: int):
         date_ = self.specify_eval_targets[item]['date']
         lon = self.specify_eval_targets[item]['lon']
         lat = self.specify_eval_targets[item]['lat']
         return super().get_arbitrary_item(date_, lon, lat)
 
+
+class PreSavedPrecipDataset(DailyAggregateRainfallDataset):
+    """
+    Pre-sampled set of crops of precipitation, stored in torch tensors. Use this for deterministic evaluation.
+    """
+
+    def __init__(self, data_config: dict, sample_path: str):
+        super().__init__(data_config)
+        self.sample_path = sample_path
+
+        samples = os.listdir(self.sample_path)
+        self.samples = [f for f in samples if f.endswith('.pt') and f.startswith('batch')]
+
+    def __len__(self):
+        return len(self.samples)
+
     def __getitem__(self, item: int):
-        if self.dataloader_mode == 'specify_eval':
-            return self.get_item_specified(item)
-        elif self.dataloader_mode == 'eval_set_random':
-            raise NotImplementedError()
-        else:
-            raise NotImplementedError()
+        batch_dict = torch.load(p.join(self.sample_path, self.samples[item]))
+        return batch_dict, None, None, None
 
 
 def xarray_collate_fn(batch):
@@ -57,3 +67,10 @@ def xarray_collate_fn(batch):
             # Use default collate for other types
             collated_batch.append(default_collate(element))
     return tuple(collated_batch)  # Return as a tuple of 4 elements
+
+
+def do_nothing_collate_fn(batch):
+    """
+    Handles a dict of tensors; will not add a minibatch dimension
+    """
+    return batch[0]
