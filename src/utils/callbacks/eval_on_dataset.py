@@ -29,7 +29,9 @@ class EvalOnDataset(Callback):
         self.skip_existing = skip_existing
         self.eval_only_on_existing = eval_only_on_existing
         self.show_vis = show_vis
-        self.vis_dir = p.join(save_dir, 'vis')
+        if self.show_vis:
+            self.vis_dir = p.join(save_dir, 'vis')
+            os.makedirs(self.vis_dir, exist_ok=True)
 
         # metrics-related constants
         self.csi_threshold = csi_threshold
