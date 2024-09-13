@@ -51,7 +51,7 @@ data:
     image_size: 512
 
 paths:
-  output_dir: /home/yl241/data/rainfall_eval_LiT/start
+  output_dir: /home/yl241/data/rainfall_eval_LiT/test_metrics
   log_dir: ${paths.output_dir}
 
 

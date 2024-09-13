@@ -53,6 +53,7 @@ class WassDiffLitModule(LightningModule):
         # internal flags
         self.automatic_optimization = False
         self.first_batch_visualized = False
+        self.skip_next_batch = False  # flag to be modified by callbacks
 
         return
 
@@ -260,6 +261,9 @@ class WassDiffLitModule(LightningModule):
         :param batch: A batch of data (a tuple) containing the input tensor of images and target labels.
         :param batch_idx: The index of the current batch.
         """
+        if self.skip_next_batch:  # determine whether to skip this batch
+            return {}
+
         batch_dict, batch_coords, xr_low_res_batch, valid_mask = batch  # discard coordinates FIXME
         condition, gt = self._generate_condition(batch_dict)
 

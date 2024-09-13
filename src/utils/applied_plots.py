@@ -13,7 +13,14 @@ from src.data.cpc_mrms_dataset import DailyAggregateRainfallDataset
 from scipy.stats.mstats import winsorize
 import ast
 
+
+"""
+Plotting functions to run AFTER inference has been completed for a particular set of data
+"""
+
 # TODO: this file has not been adopted to LiT codebase
+# TODO: there is a hydra error
+
 
 def gether_quantile_data(dir_path, dataset, method_name, batch_key='precip_output'):
     batch = torch.load(p.join(dir_path, 'batch.pt'))

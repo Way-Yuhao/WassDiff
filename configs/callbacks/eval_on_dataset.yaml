@@ -1,3 +1,4 @@
 eval_on_dataset:
   _target_: src.utils.callbacks.eval_on_dataset.EvalOnDataset
   save_dir: ${paths.output_dir}
+  skip_existing: true
