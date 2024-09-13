@@ -152,7 +152,7 @@ class WassDiffLitModule(LightningModule):
             state = dict(step=0, optimizer=optimizer, model=score_model, ema=ema)
             state = restore_checkpoint(self.hparams.pytorch_ckpt_path, state, self.device)
             ema.copy_to(score_model.parameters())
-            yprint(f"Restored model from Pytorch ckpt: {self.hparams.pytorch_ckpt_path}")
+            yprint(f"\nRestored model from Pytorch ckpt: {self.hparams.pytorch_ckpt_path}")
 
         # sigmas = mutils.get_sigmas(self.model_config) # not used here or NCSN codebase
         self.scaler = datasets.get_data_scaler(self.model_config)
