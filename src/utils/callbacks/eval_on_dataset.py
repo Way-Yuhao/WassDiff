@@ -199,6 +199,7 @@ def vis_sample(cpc_inter: np.ndarray, output: np.ndarray, gt: np.ndarray, save_d
     axes[2].set_title('Ground Truth')
     fig.colorbar(im3, ax=axes, pad=0.01)  # add colorbar at the right of the last image, applies to all images
     # plt.show()
-    plt.savefig(p.join(save_dir, f'{batch}_{index}.png'))
+    basename = batch.replace('.pt', '')  # This will give '7'
+    plt.savefig(p.join(save_dir, f'{basename}_sample_{index}.png'))
     plt.close()
     return
