@@ -521,6 +521,7 @@ def extract_values_from_batch(batch: Dict[str, torch.Tensor]) -> Dict[str, torch
     """
     return {key: tensor.item() for key, tensor in batch.items()}
 
+
 def squeeze_batch(batch: Dict[str, torch.Tensor], dim: Union[int, Tuple]) -> Dict[str, torch.Tensor]:
     """
     Squeezes a dict of tensors.
