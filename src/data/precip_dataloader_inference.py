@@ -7,6 +7,7 @@ import torch
 from torch.utils.data._utils.collate import default_collate
 from torch.utils.data import Dataset
 import xarray as xr
+from natsort import natsorted
 from src.data.cpc_mrms_dataset import DailyAggregateRainfallDataset
 
 
@@ -35,12 +36,15 @@ class PreSavedPrecipDataset(DailyAggregateRainfallDataset):
     Pre-sampled set of crops of precipitation, stored in torch tensors. Use this for deterministic evaluation.
     """
 
-    def __init__(self, data_config: dict, sample_path: str):
+    def __init__(self, data_config: dict, sample_path: str, stop_at_batch: Optional[int]):
         super().__init__(data_config)
         self.sample_path = sample_path
+        self.stop_at_batch = stop_at_batch  # stop at this number of batches
 
         samples = os.listdir(self.sample_path)
-        self.samples = [f for f in samples if f.endswith('.pt') and f.startswith('batch')]
+        self.samples = natsorted([f for f in samples if f.endswith('.pt') and f.startswith('batch')])
+        if self.stop_at_batch:
+            self.samples = self.samples[:self.stop_at_batch]
 
     def __len__(self):
         return len(self.samples)

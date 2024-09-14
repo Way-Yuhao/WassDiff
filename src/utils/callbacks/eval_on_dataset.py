@@ -69,8 +69,8 @@ class EvalOnDataset(Callback):
         if self.eval_only_on_existing:
             pl_module.skip_next_batch = True
             return
-        elif os.path.exists(p.join(self.save_dir, f'batch_{batch_idx}.pt')):
-            print(f"Skipping batch {batch_idx}")
+        if os.path.exists(p.join(self.save_dir, f'batch_{batch_idx}.pt')):
+            print(f"Skipping batch {batch_idx}; already exists.")
             pl_module.skip_next_batch = True
             return
 

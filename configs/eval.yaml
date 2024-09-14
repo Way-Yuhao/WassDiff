@@ -47,11 +47,12 @@ model:
 data:
   dataloader_mode: eval_set_deterministic
   use_test_samples_from: /home/yl241/data/rainfall_eval/50_eval_samples_2
+  stop_at_batch: 26
   data_config:
     image_size: 512
 
 paths:
-  output_dir: /home/yl241/data/rainfall_eval_LiT/test_metrics
+  output_dir: /home/yl241/data/rainfall_eval_LiT/WassDiff_pytorch
   log_dir: ${paths.output_dir}
 
 

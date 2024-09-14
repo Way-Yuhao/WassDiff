@@ -7,7 +7,7 @@ eval_on_dataset:
   save_dir: ${paths.output_dir}
   skip_existing: true
   show_vis: false
-  eval_only_on_existing: true # debug
+  eval_only_on_existing: false # debug
 
   # metric-related constants
   csi_threshold: ${metrics.csi_threshold}

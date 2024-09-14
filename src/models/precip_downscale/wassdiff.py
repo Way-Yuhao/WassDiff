@@ -279,7 +279,7 @@ class WassDiffLitModule(LightningModule):
         # Fixme: enable those lines
         x = self.pc_upsampler(self.net, self.scaler(condition), w=self.model_config.model.w_guide,
                               out_dim=(batch_size, 1, self.model_config.data.image_size, self.model_config.data.image_size),
-                              save_dir=None, null_condition=null_condition, gt=gt, display_pbar=True)
+                              save_dir=None, null_condition=null_condition, gt=gt, display_pbar=False)
         if self.hparams.num_samples == 1:
             batch_dict['precip_output'] = x
         else:
