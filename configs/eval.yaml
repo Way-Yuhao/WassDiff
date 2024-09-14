@@ -18,12 +18,12 @@ task_name: "eval"
 tags: ["dev"]
 
 # passing checkpoint path is necessary for evaluation
-#ckpt_path: /home/yl241/models/WassDiff-LiT/2024-09-05_20-56-22/checkpoints/epoch_740.ckpt
-ckpt_path: null
+ckpt_path: /home/yl241/models/WassDiff-LiT/2024-09-05_20-56-22/checkpoints/epoch_740.ckpt
+#ckpt_path: null
 
 model:
   num_samples: 1
-  pytorch_ckpt_path: /home/yl241/models/NCSNPP/wandb/run-20240503_110757-gvq9r51l/checkpoints/checkpoint_21.pth
+#  pytorch_ckpt_path: /home/yl241/models/NCSNPP/wandb/run-20240503_110757-gvq9r51l/checkpoints/checkpoint_21.pth
 
 
 #### SPECIFY EVAL MODE ####
@@ -52,7 +52,7 @@ data:
     image_size: 512
 
 paths:
-  output_dir: /home/yl241/data/rainfall_eval_LiT/WassDiff_pytorch
+  output_dir: /home/yl241/data/rainfall_eval_LiT/WassDiff_LiT_trained_2024-09-05_20-56-22
   log_dir: ${paths.output_dir}
 
 
