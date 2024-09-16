@@ -5,16 +5,15 @@ from tqdm import tqdm
 import numpy as np
 import pandas as pd
 import torch
-from lightning import LightningModule, Trainer
 from lightning.pytorch.utilities.types import STEP_OUTPUT
-import wandb
 from matplotlib import pyplot as plt
+from natsort import natsorted
+from datetime import datetime
 from lightning.pytorch.callbacks import RichProgressBar, Callback
-from src.utils.helper import yprint
-# metrics
+from src.utils.helper import yprint, monitor_complete
 import lpips
 from src.utils.metrics import calc_mae, calc_mse, calc_rmse, calc_pcc, calc_csi, calc_bias, calc_fss, calc_emd, \
-    calc_hrre, calc_mppe, calc_lpips
+    calc_hrre, calc_mppe, calc_lpips, calc_crps
 
 
 class EvalOnDataset(Callback):
@@ -202,4 +201,109 @@ def vis_sample(cpc_inter: np.ndarray, output: np.ndarray, gt: np.ndarray, save_d
     basename = batch.replace('.pt', '')  # This will give '7'
     plt.savefig(p.join(save_dir, f'{basename}_sample_{index}.png'))
     plt.close()
+    return
+
+
+# @monitor_complete
+def compute_ensemble_metrics(parent_save_dir, save_dir_pattern, show_vis=False, show_metric_for='ours',
+                             ensemble_size=None):
+    """
+    Static method for meta-analysis
+    """
+    ensemble_output_path = p.join(parent_save_dir, save_dir_pattern + '_ensemble')
+    if not p.exists(ensemble_output_path):
+        os.mkdir(ensemble_output_path)
+        print(f'Created directory: {ensemble_output_path}')
+    runs = os.listdir(parent_save_dir)
+    runs = natsorted([r for r in runs if r.startswith(save_dir_pattern) and 'ensemble' not in r])
+    runs = natsorted([r for r in runs if r.startswith(save_dir_pattern) and '+' not in r])
+    print(f'Found {len(runs)} runs: {runs}')
+    if ensemble_size is not None:
+        runs = runs[:ensemble_size]
+        print(f'Only using the first {ensemble_size} runs')
+        print(runs)
+
+    # each run should have the same ckpt
+    ckpt_paths = []
+    for run in runs:
+        save_dir = p.join(parent_save_dir, run)
+        with open(p.join(save_dir, 'summary.txt'), 'r') as f:
+            lines = f.readlines()
+            for line in lines:
+                if 'checkpoint' in line:
+                    ckpt_paths.append(line.split(': ')[1].strip())
+                    break
+    assert len(ckpt_paths) == len(runs)
+    assert np.all([ckpt_path == ckpt_paths[0] for ckpt_path in ckpt_paths]), 'Checkpoints are not the same'
+
+    # number of common batches in each run, assuming sequential numbering
+    num_batches = min([len([b for b in os.listdir(p.join(parent_save_dir, run)) if 'batch_' in b]) for run in runs])
+    print(f'Found {num_batches} batches in each run')
+
+    with open(p.join(ensemble_output_path, 'summary.txt'), 'a') as f:
+        f.write(f'executed on: {datetime.now()}\n')
+        f.write(f'checkpoint: {ckpt_paths[0]}\n')
+        f.write(f'ensemble runs: {runs}\n')
+        f.write(f'number of batches: {num_batches}\n')
+
+    batch_size = torch.load(os.path.join(parent_save_dir, runs[0], 'batch_0.pt'))['precip_up'].shape[0]
+
+    metrics = []
+    for f in tqdm(range(num_batches), desc='Computing ensemble metrics'):
+
+        for i in range(batch_size):
+            precip_output, precip_gt = None, None  # numpy array of shape [k, 1, h, w] and [1, h, w]
+            # load the output and gt for each run
+            for run in runs:
+                save_dir = p.join(parent_save_dir, run)
+                batch_dict = torch.load(p.join(save_dir, f'batch_{f}.pt'))
+                for key, item in batch_dict.items():
+                    if key == 'precip_output':
+                        cur_precip = item[i, 0, :, :].cpu().detach().numpy()
+                        cur_precip = np.expand_dims(cur_precip, axis=0)
+                        if precip_output is None:
+                            precip_output = cur_precip
+                        else:
+                            precip_output = np.concatenate([precip_output, cur_precip], axis=0)
+                    elif key == 'precip_gt':
+                        if precip_gt is None:
+                            precip_gt = item[i, 0, :, :].cpu().detach().numpy()
+                        else:
+                            # check if the gt is the same for all runs
+                            assert np.allclose(precip_gt, item[i, 0, :, :].cpu().detach().numpy())
+            row = {}
+            valid_mask = precip_gt != -1
+            if not filter_sample_logic(valid_mask, logic='remove_any_invalid'):
+                continue
+            precip_output_avg = np.mean(precip_output, axis=0)
+            pooling_func = 'mean'
+            row['batch'] = f
+            row['index'] = i
+            row['gt_precip_mean'] = np.mean(precip_gt[valid_mask])
+            row['gt_precip_max'] = np.max(precip_gt[valid_mask])
+            row['mae'] = calc_mae(precip_output_avg, precip_gt)
+            row['crps'] = calc_crps(precip_output, precip_gt)
+            row['csi'] = calc_csi(precip_output_avg, precip_gt, threshold=10, valid_mask=valid_mask, k=1, pooling_func=pooling_func)
+            row['csi_p16'] = calc_csi(precip_output_avg, precip_gt, threshold=10, valid_mask=valid_mask, k=16, pooling_func=pooling_func)
+            row['bias'] = calc_bias(precip_output_avg, precip_gt, valid_mask, k=1, pooling_func=pooling_func)
+
+            metrics.append(list(row.values()))
+
+    metrics_df = pd.DataFrame(metrics, columns=list(row.keys()))
+    metrics_df.to_csv(p.join(ensemble_output_path, f'metrics_{ensemble_size}_members.csv'))
+
+    summary_stats_mean = metrics_df.iloc[:, 2:].mean()
+    summary_stats_std = metrics_df.iloc[:, 2:].std()
+    print(f'----------------Summary Statistics [{show_metric_for}]----------------')
+    print("Mean:")
+    print(summary_stats_mean)
+    print("Standard Deviation:")
+    print(summary_stats_std)
+    summary_stats = pd.concat([summary_stats_mean, summary_stats_std], axis=1)
+
+    # Name the columns appropriately
+    summary_stats.columns = ['Mean', 'Standard Deviation']
+
+    # Save to csv
+    summary_stats.to_csv(p.join(ensemble_output_path, f'summary_stats_{ensemble_size}_members.csv'))
     return

@@ -1,23 +1,28 @@
 import os
 import os.path as p
-import sys
+# import sys
 import numpy as np
-import xarray as xr
+# import xarray as xr
 import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
 import torch
 from hydra import compose, initialize
 from natsort import natsorted
+from tqdm import trange
+import rootutils
+
+rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
+
 from src.data.cpc_mrms_dataset import DailyAggregateRainfallDataset
 from scipy.stats.mstats import winsorize
 import ast
-
+from src.utils.callbacks.eval_on_dataset import compute_ensemble_metrics
 
 """
+META ANALYSIS PLOTS
 Plotting functions to run AFTER inference has been completed for a particular set of data
 """
-
 # TODO: this file has not been adopted to LiT codebase
 # TODO: there is a hydra error
 
@@ -117,8 +122,6 @@ def plot_qq_ensemble(num_samples, save_dir):
     sns.lineplot(data=df_ours_minus, y='sample_quantile', x='gt_quantile', color='tab:purple',
                  markers='o', errorbar='sd', linewidth=2)
     # sns.lineplot(data=cpc_inter, y='sample_quantile', x='gt_quantile', color='tab:green')
-
-
 
     # plot y = x ideal line
     x = np.linspace(0, int(axis_max), 100)
@@ -246,7 +249,7 @@ def load_data_from_file(filename):
     return numpy_array
 
 
-def show_sde_trajecotry():
+def show_sde_trajectory():
     sns.set_context('paper')
     # read data from '/home/yl241/data/rainfall_eval/ours_trajectory.txt'
     data_score_diff = load_data_from_file('/home/yl241/data/rainfall_eval/general/sde_trajectory_1.txt')
@@ -255,7 +258,6 @@ def show_sde_trajecotry():
     data_wass_diff = np.array(data_wass_diff)
     # plt.plot(data_score_diff[:, 4], c='tab:purple', linestyle='--')
     # plt.plot(data_wass_diff, c='tab:blue', linestyle='--')
-
 
     plt.plot(data_score_diff[:, 0], c='tab:purple', linestyle='--')
     plt.plot(data_score_diff[:, 1], c='tab:purple', linestyle='--')
@@ -270,10 +272,8 @@ def show_sde_trajecotry():
     #          c='tab:blue')
     plt.plot(data_wass_diff[:, 4], c='tab:blue', linestyle='--')
 
-
     plt.ylim([-0.7, 1.1])
     plt.xlim([0, 200])
-
 
     plt.savefig('/home/yl241/data/rainfall_eval/general/sde_trajectory.pdf', dpi=600)
     plt.show()
@@ -282,13 +282,74 @@ def show_sde_trajecotry():
     return
 
 
+def skill_vs_ensemble_size():
+
+    def _plot_line(df: pd.DataFrame, metric: str, *args, **kwargs):
+        df_for_metric = df[df['Metrics'] == metric.lower()]
+        sns.pointplot(data=df_for_metric, x='ensemble_size', y='Mean', errorbar=None, label=metric, *args, **kwargs)
+        return
+
+    eval_root_dir = '/home/yl241/data/rainfall_eval'
+    output_dir_signature = 'logp1_emd_ckpt21'  # folder name must partially match this signature
+    ensemble_dir = '/home/yl241/data/rainfall_eval/logp1_emd_ckpt21_ensemble'
+
+    # scan for output dirs
+    output_dirs = os.listdir(eval_root_dir)
+    output_dirs = [d for d in output_dirs if output_dir_signature in d]
+    output_dirs = [d for d in output_dirs if '+' not in d]
+    output_dirs = natsorted([d for d in output_dirs if 'ensemble' not in d])
+    print('Max ensemble size = {} for outputs matching signature {}'.format(len(output_dirs), output_dir_signature))
+    max_ensemble_size = len(output_dirs)
+    # print(output_dirs)
+
+    ## collect metrics for different ensemble sizes
+    # for m in range(1, max_ensemble_size + 1):
+    #     compute_ensemble_metrics(parent_save_dir=eval_root_dir,
+    #                              save_dir_pattern=output_dir_signature,
+    #                              show_vis=False, show_metric_for='ours',
+    #                              ensemble_size=m)
+
+
+    ## consolidate dataframes for mean and std
+    # individual_dfs = 'summary_stats_{}_members.csv'
+    # consolidated_df = pd.DataFrame()
+    # for m in trange(1, max_ensemble_size + 1, desc='Consolidating dataframes...'):
+    #     df = pd.read_csv(p.join(ensemble_dir, individual_dfs.format(m)))
+    #     # add ensemble size column
+    #     df['ensemble_size'] = m
+    #     consolidated_df = pd.concat([consolidated_df, df], ignore_index=True)
+    # consolidated_df.rename(columns={'Unnamed: 0': 'Metrics'}, inplace=True)
+    # consolidated_df.to_csv(p.join(ensemble_dir, 'summary_stats_all_members.csv'), index=False)
+
+
+    ## consodilate dataframes for individual datapoints
+    # individual_dfs = 'metrics_{}_members.csv'
+    # consolidated_df = pd.DataFrame()
+    # for m in trange(1, max_ensemble_size + 1, desc='Consolidating dataframes...'):
+    #     df = pd.read_csv(p.join(ensemble_dir, individual_dfs.format(m)))
+    #     # add ensemble size column
+    #     df['ensemble_size'] = m
+    #     consolidated_df = pd.concat([consolidated_df, df], ignore_index=True)
+    # consolidated_df.rename(columns={'Unnamed: 0': 'Metrics'}, inplace=True)
+    # consolidated_df.to_csv(p.join(ensemble_dir, 'metrics_all_members.csv'), index=False)
+
+
+    ## plot in terms of mean and std
+    # consolidated_df = pd.read_csv(p.join(ensemble_dir, 'summary_stats_all_members.csv'))
+    # _plot_line(consolidated_df, 'MAE', color='slategrey')
+    # _plot_line(consolidated_df, 'CRPS', color='brown')
+    # plt.legend()
+    # sns.despine()
+    # plt.show()
+
+
 def main():
     # plot_qq_ensemble(16, '/home/yl241/workspace/NCSN/plt/qq')
     # dist_output_specific_sample()
     # dist_mean_prior()
     # dist_mean_val_set()
-    # show_sde_trajecotry()
-    pass
+    # show_sde_trajectory()
+    skill_vs_ensemble_size()
 
 
 if __name__ == '__main__':
