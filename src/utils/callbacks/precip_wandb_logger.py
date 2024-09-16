@@ -38,7 +38,7 @@ class PrecipDataLogger(Callback):
 
     def _check_frequency(self, check_idx: int, key: str):
         if check_idx >= self.next_log_idx[key]:
-            self.next_log_idx[key] += self.freqs[key]
+            self.next_log_idx[key] = check_idx + self.freqs[key]
             return True
         else:
             return False
