@@ -301,7 +301,7 @@ def visualize_batch(**kwargs):
             grid_mono /= grid_mono.max()
         cm_grid = cm_(grid_mono.detach().cpu(), vis_param[k])
         images = wandb.Image(cm_grid, caption=k)
-        wandb.log({f"dataloader/{k}": images}, step=0)
+        wandb.log({f"dataloader/{k}": images})
 
 
 def visualize_batch_aggregate(**kwargs):

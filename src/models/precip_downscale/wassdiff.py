@@ -8,7 +8,6 @@ from src.models.ncsn import ncsnpp_cond
 from src.models.ncsn.ema import ExponentialMovingAverage
 from src.utils.ncsn_utils import sde_lib
 from src.utils.ncsn_utils import losses
-from src.utils.helper import visualize_batch
 import src.utils.ncsn_utils.sampling as sampling
 from src.models.ncsn import utils as mutils
 from src.utils.ncsn_utils import datasets as datasets
@@ -183,14 +182,6 @@ class WassDiffLitModule(LightningModule):
 
         self.sampling_null_condition = self._generate_null_condition()
         self.state['optimizer'] = self.optimizers()  # TODO: verify
-
-    def on_train_batch_start(self, batch, batch_idx) -> None:
-        batch, _ = batch  # discard coordinates
-        # visualize the first batch in logger
-        if not self.first_batch_visualized:
-            visualize_batch(**batch)
-            self.first_batch_visualized = True
-        return
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Perform a forward pass through the model `self.net`.

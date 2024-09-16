@@ -10,7 +10,7 @@ import wandb
 from matplotlib import pyplot as plt
 from lightning.pytorch.callbacks import RichProgressBar, Callback
 from rich.progress import Progress
-from src.utils.helper import wandb_display_grid, cm_
+from src.utils.helper import wandb_display_grid, cm_, visualize_batch
 
 
 class PrecipDataLogger(Callback):
@@ -34,6 +34,7 @@ class PrecipDataLogger(Callback):
         self.progress_bar = None
         self.sampling_pbar_desc = 'Sampling on validation set...'
         # self.first_samples_logged = False
+        self.first_batch_visualized = False
         return
 
     def _check_frequency(self, check_idx: int, key: str):
@@ -51,6 +52,15 @@ class PrecipDataLogger(Callback):
             if isinstance(callback, RichProgressBar):
                 self.progress_bar = callback
                 break
+        return
+
+    def on_train_batch_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", batch: Any,
+                             batch_idx: int) -> None:
+        # visualize the first batch in logger
+        batch, _ = batch  # discard coordinates
+        if not self.first_batch_visualized:
+            visualize_batch(**batch)
+            self.first_batch_visualized = True
         return
 
     def on_validation_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
