@@ -22,7 +22,7 @@ Plotting functions to run AFTER inference has been completed for a particular se
 # TODO: there is a hydra error
 
 
-def gether_quantile_data(dir_path, dataset, method_name, batch_key='precip_output'):
+def gather_quantile_data(dir_path, dataset, method_name, batch_key='precip_output'):
     batch = torch.load(p.join(dir_path, 'batch.pt'))
     batch = dataset.inverse_normalize_batch(batch)
 
@@ -97,9 +97,9 @@ def plot_qq_ensemble(num_samples, save_dir):
     ours_dir = p.join(parent_dir, 'emd_wop2_gaint_hail_il_16')
     our_minus_dir = p.join(parent_dir, 'sbdm_r_gaint_hail_il_16')
 
-    ours_df, axis_max = gether_quantile_data(ours_dir, dataset, method_name='ours')
-    df_ours_minus, _ = gether_quantile_data(our_minus_dir, dataset, method_name='ours-')
-    cpc_inter, _ = gether_quantile_data(ours_dir, dataset, method_name='CPC_Int', batch_key='precip_up')
+    ours_df, axis_max = gather_quantile_data(ours_dir, dataset, method_name='ours')
+    df_ours_minus, _ = gather_quantile_data(our_minus_dir, dataset, method_name='ours-')
+    cpc_inter, _ = gather_quantile_data(ours_dir, dataset, method_name='CPC_Int', batch_key='precip_up')
 
     # df = pd.concat([ours_df, ours_minus_dir], ignore_index=True)
 
