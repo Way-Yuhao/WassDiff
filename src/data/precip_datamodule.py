@@ -48,7 +48,7 @@ class PrecipDataModule(LightningDataModule):
     """
 
     def __init__(self, data_config: dict, batch_size: int = 12, num_workers: int = 1, pin_memory: bool = False,
-                 seed: int = 42, dataloader_mode: Optional[str] = None, *args, **kwargs) -> None:
+                 seed: int = 42, dataloader_mode: str = 'train', *args, **kwargs) -> None:
         """Initialize a `PrecipDataModule`.
         :param batch_size: The batch size. Defaults to `64`.
         :param num_workers: The number of workers. Defaults to `0`.
