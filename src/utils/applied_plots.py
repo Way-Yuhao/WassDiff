@@ -282,13 +282,14 @@ def show_sde_trajecotry():
     return
 
 
-
 def main():
-    plot_qq_ensemble(16, '/home/yl241/workspace/NCSN/plt/qq')
+    # plot_qq_ensemble(16, '/home/yl241/workspace/NCSN/plt/qq')
     # dist_output_specific_sample()
     # dist_mean_prior()
     # dist_mean_val_set()
     # show_sde_trajecotry()
+    pass
+
 
 if __name__ == '__main__':
     main()
