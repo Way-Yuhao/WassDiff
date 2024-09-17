@@ -7,7 +7,7 @@ defaults:
 #  - callbacks: specified_eval
   - callbacks: eval_on_dataset
   - logger: null
-  - trainer: default
+  - trainer: gpu
   - paths: default
   - extras: default
   - hydra: default
@@ -54,7 +54,7 @@ data:
     image_size: 512
 
 paths:
-  output_dir: /home/yl241/data/rainfall_eval_LiT/WassDiff_LiT_trained_130k_steps
+  output_dir: /home/yl241/data/rainfall_eval_LiT/another_folder
   log_dir: ${paths.output_dir}
 
 
