@@ -1,5 +1,5 @@
 from typing import Any, Dict, Tuple, Optional
-import wandb
+# import wandb
 import torch
 from lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
@@ -14,7 +14,6 @@ from src.utils.ncsn_utils import datasets as datasets
 # sampling
 from src.utils.ncsn_utils.sampling import ReverseDiffusionPredictor, LangevinCorrector
 import src.utils.ncsn_utils.controllable_generation as controllable_generation
-# debug related imports
 from src.utils.ncsn_utils.utils import restore_checkpoint
 from src.utils.ncsn_utils.losses import get_optimizer
 from src.utils.helper import yprint

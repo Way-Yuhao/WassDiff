@@ -29,3 +29,4 @@ __author__ = 'Yuhao Liu'
 class GenericPrecipDownscaleModule(LightningModule):
 
     def __init__(self):
+        # TODO

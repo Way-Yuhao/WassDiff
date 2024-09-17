@@ -1,0 +1,6 @@
+defaults:
+  - wassdiff
+  - _self_
+
+_target_: src.models.precip_downscale.ablation_era5.WassDiffAblationERA5Module
+exclude_var: 'surf_tmep'
