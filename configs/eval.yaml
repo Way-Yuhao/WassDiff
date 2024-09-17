@@ -59,7 +59,7 @@ data:
     image_size: 512
 
 paths:
-  output_dir:  ${local.eval_set_root_dir}/another_folder
+  output_dir:  ${local.eval_set_root_dir}/test_compile
   log_dir: ${paths.output_dir}
 
 

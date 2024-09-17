@@ -53,6 +53,7 @@ class WassDiffLitModule(LightningModule):
         self.automatic_optimization = False
         self.first_batch_visualized = False
         self.skip_next_batch = False  # flag to be modified by callbacks
+        self.display_sampling_pbar = True  # for debug onl
 
         return
 
@@ -66,12 +67,12 @@ class WassDiffLitModule(LightningModule):
         :param stage: Either `"fit"`, `"validate"`, `"test"`, or `"predict"`.
         """
         # Compile via JiT
-        # if self.hparams.compile and stage == "fit":
-        #     self.net = torch.compile(self.net)
-        if self.hparams.compile:
-            print("Compiling model...")
+        if self.hparams.compile and stage == "fit":
             self.net = torch.compile(self.net)
-        return
+        # if self.hparams.compile:
+        #     print("Compiling model...")
+        #     self.net = torch.compile(self.net)
+        # return
 
     def configure_optimizers(self) -> Dict[str, Any]:
         """Choose what optimizers and learning-rate schedulers to use in your optimization.
@@ -245,6 +246,8 @@ class WassDiffLitModule(LightningModule):
 
     def on_test_start(self):
         self.configure_sampler()
+        if self.hparams.compile:
+            self.net = torch.compile(self.net)
 
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
         """Perform a single test step on a batch of data from the test set.
@@ -268,17 +271,17 @@ class WassDiffLitModule(LightningModule):
         batch_size = condition.shape[0]
 
         # FIXME: enable those lines
-        # x = self.pc_upsampler(self.net, self.scaler(condition), w=self.model_config.model.w_guide,
-        #                       out_dim=(batch_size, 1, self.model_config.data.image_size, self.model_config.data.image_size),
-        #                       save_dir=None, null_condition=null_condition, gt=gt, display_pbar=False)
-        # if self.hparams.num_samples == 1:
-        #     batch_dict['precip_output'] = x
-        # else:
-        #     for i in range(self.hparams.num_samples):
-        #         batch_dict['precip_output_' + str(i)] = x[i, :, :, :]
+        x = self.pc_upsampler(self.net, self.scaler(condition), w=self.model_config.model.w_guide,
+                              out_dim=(batch_size, 1, self.model_config.data.image_size, self.model_config.data.image_size),
+                              save_dir=None, null_condition=null_condition, gt=gt, display_pbar=self.display_sampling_pbar)
+        if self.hparams.num_samples == 1:
+            batch_dict['precip_output'] = x
+        else:
+            for i in range(self.hparams.num_samples):
+                batch_dict['precip_output_' + str(i)] = x[i, :, :, :]
 
         # FIXME: disable this line
-        batch_dict['precip_output'] = torch.zeros_like(gt)
+        # batch_dict['precip_output'] = torch.zeros_like(gt)
 
         return {'batch_dict': batch_dict, 'batch_coords': batch_coords, 'xr_low_res_batch': xr_low_res_batch,
                 'valid_mask': valid_mask}
