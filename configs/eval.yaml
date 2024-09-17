@@ -11,11 +11,16 @@ defaults:
   - paths: default
   - extras: default
   - hydra: default
+   # optional local config for machine/user specific settings
+   # it's optional since it doesn't need to exist and is excluded from version control
+  - optional local: default
   - _self_
 
 task_name: "eval"
 
 tags: ["dev"]
+
+
 
 # passing checkpoint path is necessary for evaluation
 #ckpt_path: /home/yl241/models/WassDiff-LiT/2024-09-05_20-56-22/checkpoints/epoch_740.ckpt
@@ -40,21 +45,20 @@ model:
 #      lat: 36
 #
 #paths:
-#  output_dir: /home/yl241/data/rainfall_plots_LiT/logger_debug_3
+#  output_dir: ${local.specified_eval_root_dir}/logger_debug_3
 #  log_dir: ${paths.output_dir}
-
 
 
 #### EVAL SET ########
 data:
   dataloader_mode: eval_set_deterministic
-  use_test_samples_from: /home/yl241/data/rainfall_eval/50_eval_samples_2
+  use_test_samples_from: ${paths.data_dir}/rainfall_eval/50_eval_samples_2
   stop_at_batch: 26
   data_config:
     image_size: 512
 
 paths:
-  output_dir: /home/yl241/data/rainfall_eval_LiT/another_folder
+  output_dir:  ${local.eval_set_root_dir}/another_folder
   log_dir: ${paths.output_dir}
 
 

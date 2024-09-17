@@ -4,10 +4,12 @@
 root_dir: ${oc.env:PROJECT_ROOT}
 
 # path to data directory
-data_dir: ${paths.root_dir}/data/
+#data_dir: ${paths.root_dir}/data/
+data_dir: ${local.data_dir}
 
 # path to logging directory
-log_dir: /home/yl241/models/WassDiff-LiT
+#log_dir: /home/yl241/models/WassDiff-LiT
+log_dir: ${local.log_dir}
 
 # path to output directory, created dynamically by hydra
 # path generation pattern is specified in `configs/hydra/default.yaml`
@@ -18,7 +20,7 @@ output_dir: ${hydra:runtime.output_dir}
 work_dir: ${hydra:runtime.cwd}
 
 dataset_path:
-  base_path: /home/yl241/data # specific to Insight
+  base_path: ${paths.data_dir}
   mrms: '${paths.dataset_path.base_path}/CLIMATE/nexrad'
   era5: '${paths.dataset_path.base_path}/CLIMATE/ERA5'
   interpolated_era5: '${paths.dataset_path.base_path}/CLIMATE/ERA5_INTERP'
