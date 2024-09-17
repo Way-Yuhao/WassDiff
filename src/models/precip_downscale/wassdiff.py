@@ -66,7 +66,10 @@ class WassDiffLitModule(LightningModule):
         :param stage: Either `"fit"`, `"validate"`, `"test"`, or `"predict"`.
         """
         # Compile via JiT
-        if self.hparams.compile and stage == "fit":
+        # if self.hparams.compile and stage == "fit":
+        #     self.net = torch.compile(self.net)
+        if self.hparams.compile:
+            print("Compiling model...")
             self.net = torch.compile(self.net)
         return
 

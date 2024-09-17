@@ -9,16 +9,19 @@ class SlackAlert(Callback):
     Callback for sending a slack alert.
     """
 
-    def __init__(self, exception_only: bool = False):
+    def __init__(self, exception_only: bool = False, disabled: bool = False):
         super().__init__()
         self.exception_only = exception_only  # Flag to indicate if the alert should only be sent on exceptions
         self.pl_module_device = None
         self.exception_occurred = False  # Flag to indicate if an exception occurred
+        self.disabled = disabled  # Flag to indicate if the callback is disabled
 
     def on_exception(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", exception: BaseException) -> None:
         """
         Send slack alert on exceptions.
         """
+        if self.disabled:
+            raise exception
         stack_trace = traceback.format_exc()
         # Prepare the alert message
         title = 'Exception Occurred:'
@@ -33,7 +36,7 @@ class SlackAlert(Callback):
         Send slack alert on successful teardown.
         """
 
-        if not self.exception_only and not self.exception_occurred:
+        if not self.exception_only and not self.exception_occurred and not self.disabled:
             title = f'{stage.capitalize()} completed'
             # Get the current time
             now = datetime.now()

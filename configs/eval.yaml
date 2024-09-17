@@ -30,6 +30,7 @@ ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-15_23-56-41/checkpoints/
 
 model:
   num_samples: 1
+  compile: true
 #  pytorch_ckpt_path: ${local.model_root_dir}/NCSNPP/wandb/run-20240503_110757-gvq9r51l/checkpoints/checkpoint_21.pth
 
 
