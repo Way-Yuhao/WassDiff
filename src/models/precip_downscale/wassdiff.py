@@ -192,16 +192,6 @@ class WassDiffLitModule(LightningModule):
         """
         return self.net(x)
 
-    def model_step(self, batch: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Perform a single model step on a batch of data.
-        :param batch: A batch of data (a tuple) containing the input tensor of images and target labels.
-        :return: A tuple containing (in order):
-            - A tensor of losses.
-            - A tensor of predictions.
-            - A tensor of target labels.
-        """
-        raise NotImplementedError()
-
     def training_step(
             self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
         """Perform a single training step on a batch of data from the training set.
@@ -282,10 +272,6 @@ class WassDiffLitModule(LightningModule):
 
         return {'batch_dict': batch_dict, 'batch_coords': batch_coords, 'xr_low_res_batch': xr_low_res_batch,
                 'valid_mask': valid_mask}
-
-    def on_test_epoch_end(self) -> None:
-        """Lightning hook that is called when a test epoch ends."""
-        pass
 
     def _generate_null_condition(self):
         # generate null condition for sampling
