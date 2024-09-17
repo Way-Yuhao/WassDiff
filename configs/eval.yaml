@@ -19,7 +19,8 @@ tags: ["dev"]
 
 # passing checkpoint path is necessary for evaluation
 #ckpt_path: /home/yl241/models/WassDiff-LiT/2024-09-05_20-56-22/checkpoints/epoch_740.ckpt
-ckpt_path: /home/yl241/models/WassDiff-LiT/2024-09-11_12-07-58/checkpoints/epoch_679.ckpt
+#ckpt_path: /home/yl241/models/WassDiff-LiT/2024-09-11_12-07-58/checkpoints/epoch_679.ckpt
+ckpt_path: /home/yl241/models/WassDiff-LiT/2024-09-15_23-56-41/checkpoints/epoch_802.ckpt
 #ckpt_path: null
 
 model:
@@ -53,7 +54,7 @@ data:
     image_size: 512
 
 paths:
-  output_dir: /home/yl241/data/rainfall_eval_LiT/WassDiff_LiT_trained_2024-09-11_12
+  output_dir: /home/yl241/data/rainfall_eval_LiT/WassDiff_LiT_trained_130k_steps
   log_dir: ${paths.output_dir}
 
 

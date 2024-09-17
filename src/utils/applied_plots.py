@@ -342,6 +342,23 @@ def skill_vs_ensemble_size():
     # sns.despine()
     # plt.show()
 
+    ## plot in terms of individual datapoints
+    consolidated_df = pd.read_csv(p.join(ensemble_dir, 'metrics_all_members.csv'))
+    metric = 'CRPS'
+    # sns.catplot(data=consolidated_df, x='ensemble_size', y=metric.lower(), color='slategrey',
+    #             errorbar="se", kind='point')
+
+    # sns.catplot(data=consolidated_df, x='ensemble_size', y=metric.lower(), color='slategrey',
+    #             errorbar="se", kind='point')
+
+    # sns.violinplot(data=consolidated_df, x='ensemble_size', y=metric.lower(), split=True, inner="quart",
+    #                cut=0)
+
+    sns.boxenplot(data=consolidated_df, x='ensemble_size', y=metric.lower(), showfliers=False)
+
+    sns.despine()
+    plt.show()
+
 
 def main():
     # plot_qq_ensemble(16, '/home/yl241/workspace/NCSN/plt/qq')
