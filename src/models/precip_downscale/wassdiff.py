@@ -68,11 +68,8 @@ class WassDiffLitModule(LightningModule):
         """
         # Compile via JiT
         if self.hparams.compile and stage == "fit":
+            raise NotImplementedError("JIT compilation not supported for training.")
             self.net = torch.compile(self.net)
-        # if self.hparams.compile:
-        #     print("Compiling model...")
-        #     self.net = torch.compile(self.net)
-        # return
 
     def configure_optimizers(self) -> Dict[str, Any]:
         """Choose what optimizers and learning-rate schedulers to use in your optimization.
