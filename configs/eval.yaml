@@ -7,7 +7,7 @@ defaults:
 #  - callbacks: specified_eval
   - callbacks: eval_on_dataset
   - logger: null
-  - trainer: gpu
+  - trainer: default
   - paths: default
   - extras: default
   - hydra: default
@@ -30,7 +30,7 @@ ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-15_23-56-41/checkpoints/
 
 model:
   num_samples: 1
-  compile: true
+  compile: false
 #  pytorch_ckpt_path: ${local.model_root_dir}/NCSNPP/wandb/run-20240503_110757-gvq9r51l/checkpoints/checkpoint_21.pth
 
 
@@ -51,6 +51,7 @@ model:
 
 
 #### EVAL SET ########
+name: WassDiff_LiT_trained_130k_steps_2gpus
 data:
   dataloader_mode: eval_set_deterministic
   use_test_samples_from: ${paths.data_dir}/rainfall_eval/50_eval_samples_2
@@ -59,7 +60,7 @@ data:
     image_size: 512
 
 paths:
-  output_dir:  ${local.eval_set_root_dir}/test_compile
+  output_dir:  ${local.eval_set_root_dir}/${name}
   log_dir: ${paths.output_dir}
 
 

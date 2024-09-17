@@ -53,7 +53,8 @@ class WassDiffLitModule(LightningModule):
         self.automatic_optimization = False
         self.first_batch_visualized = False
         self.skip_next_batch = False  # flag to be modified by callbacks
-        self.display_sampling_pbar = True  # for debug onl
+
+        self.display_sampling_pbar = False  # for debug onl
 
         return
 
