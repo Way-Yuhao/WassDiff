@@ -1,4 +1,5 @@
 defaults:
 #  - rich_progress_bar
   - save_xarray_results
+  - slack_alert
   - _self_

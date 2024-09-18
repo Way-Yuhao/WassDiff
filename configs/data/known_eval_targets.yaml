@@ -1,0 +1,31 @@
+known_eval_targets:
+    storm_bill:
+      - date: '20150618'
+        lon: 265
+        lat: 36
+    cold_front:
+      - date: '20151202'
+        lon: 274
+        lat: 36
+    giant_hill:
+      - date: '20150611'
+        lon: 271
+        lat: 41.4553
+
+    ##### historical examples ####
+    southeast_texas_storm:
+      - date: '19941017'
+        lon: 264
+        lat: 32
+        use_vis_max: 260
+    tropical_storm_alberto:
+      - date: '19940705'
+        lon: 275
+        lat: 33
+        use_vis_max: 250
+    central_california_winter_storm:
+      - date: '19551222'
+        lon: 240
+        lat: 39.5
+        use_vis_max: 250
+

@@ -106,7 +106,7 @@ class PrecipDataModule(LightningDataModule):
             self.train_sampler = SubsetRandomSampler(train_indices, generator=generator)
             self.val_sampler = SubsetRandomSampler(val_indices, generator=generator)
         elif self.hparams.dataloader_mode == 'specify_eval':
-            self.precip_dataset = RainfallSpecifiedInference(self.data_config, self.hparams.dataloader_mode)
+            self.precip_dataset = RainfallSpecifiedInference(self.data_config, self.hparams.specify_eval_targets)
         elif self.hparams.dataloader_mode == 'eval_set_deterministic':
             self.precip_dataset = PreSavedPrecipDataset(self.data_config, self.hparams.use_test_samples_from,
                                                         self.hparams.stop_at_batch)

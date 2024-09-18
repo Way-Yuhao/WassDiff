@@ -1,3 +1,7 @@
+defaults:
+  - known_eval_targets
+  - _self_
+
 _target_: src.data.precip_datamodule.PrecipDataModule
 batch_size: 12
 num_workers: 12
