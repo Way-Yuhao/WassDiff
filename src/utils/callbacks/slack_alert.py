@@ -1,4 +1,5 @@
 import traceback
+import socket
 from datetime import datetime
 from lightning.pytorch.callbacks import RichProgressBar, Callback
 from src.utils.helper import alert, monitor, monitor_complete
@@ -16,6 +17,8 @@ class SlackAlert(Callback):
         self.exception_occurred = False  # Flag to indicate if an exception occurred
         self.disabled = disabled  # Flag to indicate if the callback is disabled
 
+        self.hostname = socket.gethostname()
+
     def on_exception(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", exception: BaseException) -> None:
         """
         Send slack alert on exceptions.
@@ -24,7 +27,7 @@ class SlackAlert(Callback):
             raise exception
         stack_trace = traceback.format_exc()
         # Prepare the alert message
-        title = 'Exception Occurred:'
+        title = 'Exception Occurred on ' + self.hostname
         message = f'*{title}*```{stack_trace}```'
         # Send the alert using your alert function
         alert(message)
@@ -44,6 +47,6 @@ class SlackAlert(Callback):
             # Get the device
             device = str(trainer.strategy.root_device)
             # Create the message
-            message = f'*{title}*\n```Time completed: {formatted_time}\nDevice: {device}```'
+            message = f'*{title}*\n```Time completed: {formatted_time}\nHostname: {self.hostname}\nDevice: {device}```'
             alert(message)
         return
