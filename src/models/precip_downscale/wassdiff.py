@@ -256,19 +256,18 @@ class WassDiffLitModule(LightningModule):
         null_condition = torch.ones_like(condition) * self.model_config.model.null_token
         batch_size = condition.shape[0]
 
-        # FIXME: enable those lines
-        x = self.pc_upsampler(self.net, self.scaler(condition), w=self.model_config.model.w_guide,
-                              out_dim=(batch_size, 1, self.model_config.data.image_size, self.model_config.data.image_size),
-                              save_dir=None, null_condition=null_condition, gt=gt,
-                              display_pbar=self.hparams.display_sampling_pbar)
-        if self.hparams.num_samples == 1:
-            batch_dict['precip_output'] = x
+        if self.hparams.bypass_sampling:
+            batch_dict['precip_output'] = torch.zeros_like(gt)
         else:
-            for i in range(self.hparams.num_samples):
-                batch_dict['precip_output_' + str(i)] = x[i, :, :, :]
-
-        # FIXME: disable this line
-        # batch_dict['precip_output'] = torch.zeros_like(gt)
+            x = self.pc_upsampler(self.net, self.scaler(condition), w=self.model_config.model.w_guide,
+                                  out_dim=(batch_size, 1, self.model_config.data.image_size, self.model_config.data.image_size),
+                                  save_dir=None, null_condition=null_condition, gt=gt,
+                                  display_pbar=self.hparams.display_sampling_pbar)
+            if self.hparams.num_samples == 1:
+                batch_dict['precip_output'] = x
+            else:
+                for i in range(self.hparams.num_samples):
+                    batch_dict['precip_output_' + str(i)] = x[i, :, :, :]
 
         return {'batch_dict': batch_dict, 'batch_coords': batch_coords, 'xr_low_res_batch': xr_low_res_batch,
                 'valid_mask': valid_mask}

@@ -4,7 +4,8 @@ compile: false
 num_samples: 1 # for inference, aka ensemble size
 
 # debugging flags
-display_sampling_pbar: true
+display_sampling_pbar: false  # display 'sampling N steps' progress bar
+bypass_sampling: true  # during inference; training logging is not affected
 
 optimizer_config:
   optim:
