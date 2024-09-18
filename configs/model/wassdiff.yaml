@@ -1,7 +1,10 @@
 _target_: src.models.precip_downscale.wassdiff.WassDiffLitModule
 
 compile: false
-num_samples: 1 # inference
+num_samples: 1 # for inference, aka ensemble size
+
+# debugging flags
+display_sampling_pbar: true
 
 optimizer_config:
   optim:

@@ -24,7 +24,8 @@ class WassDiffLitModule(LightningModule):
     """
 
     def __init__(self, model_config: dict, optimizer_config: dict,
-                 compile: bool, num_samples: int = 1, pytorch_ckpt_path: Optional[str] = None) -> None:
+                 compile: bool, num_samples: int = 1, pytorch_ckpt_path: Optional[str] = None,
+                 *args, **kwargs) -> None:
         """Initialize a `WassDiffLitModule`.
 
         :param net: The model to train.
@@ -52,8 +53,6 @@ class WassDiffLitModule(LightningModule):
         self.automatic_optimization = False
         self.first_batch_visualized = False
         self.skip_next_batch = False  # flag to be modified by callbacks
-
-        self.display_sampling_pbar = False  # for debug onl
 
         return
 
@@ -260,7 +259,8 @@ class WassDiffLitModule(LightningModule):
         # FIXME: enable those lines
         x = self.pc_upsampler(self.net, self.scaler(condition), w=self.model_config.model.w_guide,
                               out_dim=(batch_size, 1, self.model_config.data.image_size, self.model_config.data.image_size),
-                              save_dir=None, null_condition=null_condition, gt=gt, display_pbar=self.display_sampling_pbar)
+                              save_dir=None, null_condition=null_condition, gt=gt,
+                              display_pbar=self.hparams.display_sampling_pbar)
         if self.hparams.num_samples == 1:
             batch_dict['precip_output'] = x
         else:
