@@ -51,7 +51,8 @@ class PreSavedPrecipDataset(DailyAggregateRainfallDataset):
 
     def __getitem__(self, item: int):
         batch_dict = torch.load(p.join(self.sample_path, self.samples[item]))
-        return batch_dict, None, None, None
+        batch_idx = {'batch_idx': item}
+        return batch_dict, batch_idx, None, None
 
 
 def xarray_collate_fn(batch):

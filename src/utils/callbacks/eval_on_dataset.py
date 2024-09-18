@@ -10,6 +10,7 @@ from matplotlib import pyplot as plt
 from natsort import natsorted
 from datetime import datetime
 from lightning.pytorch.callbacks import RichProgressBar, Callback
+from lightning.pytorch.utilities import rank_zero_only
 from src.utils.helper import yprint, monitor_complete
 import lpips
 from src.utils.metrics import calc_mae, calc_mse, calc_rmse, calc_pcc, calc_csi, calc_bias, calc_fss, calc_emd, \
@@ -65,9 +66,12 @@ class EvalOnDataset(Callback):
         """
         Skip batch if it already exists.
         """
+
         if self.eval_only_on_existing:
             pl_module.skip_next_batch = True
             return
+
+        batch_idx = batch[1]['batch_idx']  # for ddp
         if os.path.exists(p.join(self.save_dir, f'batch_{batch_idx}.pt')):
             print(f"Skipping batch {batch_idx}; already exists.")
             pl_module.skip_next_batch = True
@@ -80,16 +84,21 @@ class EvalOnDataset(Callback):
             return
 
         batch_dict = outputs['batch_dict']
+        batch_idx = batch[1]['batch_idx']  # for ddp
         inverse_norm_batch_dict = self.rainfall_dataset.inverse_normalize_batch(batch_dict)  # tensor
         torch.save(inverse_norm_batch_dict, p.join(self.save_dir, f'batch_{batch_idx}.pt'))
         return
 
+    @rank_zero_only
     def on_test_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         show_metric_for = 'ours'  # FIXME: hard coded for now
         files_ = os.listdir(self.save_dir)
         outputs = [f for f in files_ if f.endswith('.pt')]
         batch_size = torch.load(os.path.join(self.save_dir, outputs[0]))['precip_up'].shape[0]
-        lpips_model = lpips.LPIPS(net='alex').to('cuda:0')
+
+        print(f"HERE, rank = {pl_module.global_rank}")
+
+        lpips_model = lpips.LPIPS(net='alex').to(pl_module.device)
 
         gt_hist_total, cpc_inter_hist_total, output_hist_total = None, None, None
         gt_spectra_total, cpc_spectra_total, output_spectral_total = None, None, None
@@ -136,7 +145,7 @@ class EvalOnDataset(Callback):
                 row['emd'] = calc_emd(output, gt, valid_mask)
                 row['hrre'] = calc_hrre(output, gt, hrre_thres=self.heavy_rain_threshold)
                 row['mppe'] = calc_mppe(output, gt, valid_mask)
-                row['lpips'] = calc_lpips(output, gt, lpips_model)
+                row['lpips'] = calc_lpips(output, gt, lpips_model, pl_module.device)
                 metrics.append(list(row.values()))
 
                 # TODO: build hist
@@ -159,6 +168,10 @@ class EvalOnDataset(Callback):
         # Save to csv
         summary_stats.to_csv(p.join(self.save_dir, f'summary_stats_{show_metric_for}.csv'))
         return
+
+    def get_ddp_batch_idx(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", batch: Any,
+                            batch_idx: int):
+        pass
 
 
 def filter_sample_logic(valid_mask: np.ndarray, logic: str):

@@ -308,7 +308,7 @@ def compute_99p9_percentile(mrms_dir: str):
     print("99.9th Percentile of Daily Precipitation:", quantile_value.values)
 
 
-def calc_lpips(output: np.ndarray, gt: np.ndarray, lpips_model: lpips.LPIPS):
+def calc_lpips(output: np.ndarray, gt: np.ndarray, lpips_model: lpips.LPIPS, device: str = 'cuda'):
     """
     Compute LPIPS metric
     """
@@ -323,8 +323,8 @@ def calc_lpips(output: np.ndarray, gt: np.ndarray, lpips_model: lpips.LPIPS):
     output = torch.from_numpy(output).unsqueeze(0).unsqueeze(0).float()
     gt = torch.from_numpy(gt).unsqueeze(0).unsqueeze(0).float()
     # put to device, if necessary
-    output = output.to('cuda:0')
-    gt = gt.to('cuda:0')
+    output = output.to(device)
+    gt = gt.to(device)
     # Calculate LPIPS
     lpips_score = lpips_model.forward(output, gt)
     return lpips_score.item()

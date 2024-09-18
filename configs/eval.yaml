@@ -51,7 +51,7 @@ model:
 
 
 #### EVAL SET ########
-name: WassDiff_LiT_trained_130k_steps_2gpus
+name: WassDiff_LiT_trained_130k_steps
 data:
   dataloader_mode: eval_set_deterministic
   use_test_samples_from: ${paths.data_dir}/rainfall_eval/50_eval_samples_2
