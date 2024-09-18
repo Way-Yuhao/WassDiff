@@ -356,12 +356,12 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
                         # plt.savefig(f'/home/yl241/workspace/NCSN/plt/progression_{i}.png', bbox_inches='tight', pad_inches=0, dpi=300)
                         # plt.close()
                         # calculate mean , preserve 0th axis
-                        mean = x.mean(dim=(1,2,3))
+                        # mean = x.mean(dim=(1,2,3))
                         # print(f'progress, i = {i}, mean = {mean.detach().cpu().numpy()}')
                         # print(f'{list(mean.detach().cpu().numpy())},')
                         # write to file
-                        with open(f'/home/yl241/data/rainfall_eval/general/sde_trajectory.txt', 'a') as f:
-                            f.write(f'{list(mean.detach().cpu().numpy())},\n')
+                        # with open(f'/home/yl241/data/rainfall_eval/general/sde_trajectory.txt', 'a') as f:
+                        #     f.write(f'{list(mean.detach().cpu().numpy())},\n')
 
             else:
                 for i in range(sde.N):
