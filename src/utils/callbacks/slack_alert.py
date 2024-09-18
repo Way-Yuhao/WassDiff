@@ -26,9 +26,11 @@ class SlackAlert(Callback):
         if self.disabled:
             raise exception
         stack_trace = traceback.format_exc()
+        device = str(trainer.strategy.root_device)
+        now = datetime.now().replace(microsecond=0)
         # Prepare the alert message
-        title = 'Exception Occurred on ' + self.hostname
-        message = f'*{title}*```{stack_trace}```'
+        title = f'Exception Occurred'
+        message = f'*{title}*```{stack_trace}```\nHost: {self.hostname}\nDevice: {device}\nTime: {now}'
         # Send the alert using your alert function
         alert(message)
         self.exception_occurred = True

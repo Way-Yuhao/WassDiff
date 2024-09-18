@@ -316,7 +316,6 @@ class WassDiffLitModule(LightningModule):
             condition = stacked_tensor
         else:
             raise AttributeError()
-        # if condition has shape [m, x, y], expand to [1,
         return condition, y
 
     def _dropout_condition(self, condition: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
