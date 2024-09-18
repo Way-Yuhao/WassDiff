@@ -6,6 +6,7 @@ from torchvision.utils import make_grid
 from lightning import LightningModule, Trainer
 from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.utilities.types import STEP_OUTPUT
+from lightning.pytorch.utilities import rank_zero_only
 import wandb
 from matplotlib import pyplot as plt
 from lightning.pytorch.callbacks import RichProgressBar, Callback
@@ -44,6 +45,7 @@ class PrecipDataLogger(Callback):
         else:
             return False
 
+    @rank_zero_only
     def on_fit_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         wandb.run.summary['logdir'] = trainer.default_root_dir
         self.rainfall_dataset = trainer.datamodule.precip_dataset
@@ -54,6 +56,7 @@ class PrecipDataLogger(Callback):
                 break
         return
 
+    @rank_zero_only
     def on_train_batch_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", batch: Any,
                              batch_idx: int) -> None:
         # visualize the first batch in logger
@@ -63,12 +66,14 @@ class PrecipDataLogger(Callback):
             self.first_batch_visualized = True
         return
 
+    @rank_zero_only
     def on_validation_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
                                 batch: Any, batch_idx: int, dataloader_idx: int = 0) -> None:
 
         if self._check_frequency(trainer.global_step, 'img'):
             self._log_samples(trainer, pl_module, outputs)
 
+    @rank_zero_only
     def on_train_batch_end(self, trainer: Trainer, pl_module: LightningModule,
                            outputs: Any, batch: Any, batch_idx: int) -> None:
         if self._check_frequency(trainer.global_step, 'score'):
