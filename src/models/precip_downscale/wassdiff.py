@@ -227,7 +227,7 @@ class WassDiffLitModule(LightningModule):
         condition, gt = self._generate_condition(batch_dict)
         eval_loss, _ = self.eval_step_fn(self.state, gt, condition)
         self.log("val/loss", eval_loss, on_step=False, on_epoch=True, prog_bar=False,
-                 batch_size=condition.shape[0])
+                 batch_size=condition.shape[0], sync_dist=True)
         step_output = {"batch_dict": batch_dict, "condition": condition}
         return step_output
 
