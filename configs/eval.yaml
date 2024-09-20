@@ -24,14 +24,15 @@ tags: ["dev"]
 # passing checkpoint path is necessary for evaluation
 #ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-05_20-56-22/checkpoints/epoch_740.ckpt
 #ckpt_path:${local.model_root_dir}/WassDiff-LiT/2024-09-11_12-07-58/checkpoints/epoch_679.ckpt
-ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-11_12-07-58/checkpoints/epoch_740.ckpt
+#ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-11_12-07-58/checkpoints/epoch_740.ckpt
+ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-11_12-07-58/checkpoints/last.ckpt
 #ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-15_23-56-41/checkpoints/epoch_802.ckpt
 #ckpt_path: null
 
 model:
   num_samples: 1
   compile: false
-  display_sampling_pbar: true  # debug
+  display_sampling_pbar: false  # debug
 #  pytorch_ckpt_path: ${local.model_root_dir}/NCSNPP/wandb/run-20240503_110757-gvq9r51l/checkpoints/checkpoint_21.pth
 
 
@@ -54,7 +55,7 @@ model:
 
 
 #### EVAL SET ########
-name: WassDiff_LiT_trained_120k_steps
+name: WassDiff_LiT_trained_125k_steps
 data:
   dataloader_mode: eval_set_deterministic
   use_test_samples_from: ${paths.data_dir}/rainfall_eval/50_eval_samples_2
