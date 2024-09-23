@@ -4,6 +4,7 @@ defaults:
   - model_summary
   - rich_progress_bar
   - log_precip_data
+  - slack_alert
   - _self_
 
 model_checkpoint:
