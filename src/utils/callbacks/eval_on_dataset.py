@@ -23,12 +23,26 @@ class EvalOnDataset(Callback):
     """
 
     def __init__(self, save_dir: str, skip_existing: bool, eval_only_on_existing: bool, show_vis: bool,
-                 csi_threshold: float, heavy_rain_threshold: float, peak_mesoscale_threshold: float):
+                 csi_threshold: float, heavy_rain_threshold: float, peak_mesoscale_threshold: float,
+                 override_batch_idx: bool):
+        """
+        :param save_dir: Directory to save the outputs
+        :param skip_existing: Skip the test loop if the save_dir already contains outputs
+        :param eval_only_on_existing: Evaluate only on existing outputs
+        :param show_vis: Show visualizations
+        :param csi_threshold: Threshold for CSI
+        :param heavy_rain_threshold: Threshold for heavy rain
+        :param peak_mesoscale_threshold: Threshold for peak mesoscale
+        :param override_batch_idx: Override batch_idx with the one specified in input (use for DDP only). Requires
+        dataloader to provide batch_idx in the input.
+
+        """
         super().__init__()
         self.save_dir = save_dir
         self.skip_existing = skip_existing
         self.eval_only_on_existing = eval_only_on_existing
         self.show_vis = show_vis
+        self.override_batch_idx = override_batch_idx
         if self.show_vis:
             self.vis_dir = p.join(save_dir, 'vis')
             os.makedirs(self.vis_dir, exist_ok=True)
@@ -41,6 +55,9 @@ class EvalOnDataset(Callback):
         # to be defined elsewhere
         self.rainfall_dataset = None
         return
+
+    def on_validation_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        self.rainfall_dataset = trainer.datamodule.precip_dataset
 
     def on_test_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         self.rainfall_dataset = trainer.datamodule.precip_dataset
@@ -70,8 +87,8 @@ class EvalOnDataset(Callback):
         if self.eval_only_on_existing:
             pl_module.skip_next_batch = True
             return
-
-        batch_idx = batch[1]['batch_idx']  # for ddp
+        if self.override_batch_idx:
+            batch_idx = batch[1]['batch_idx']  # for ddp
         if os.path.exists(p.join(self.save_dir, f'batch_{batch_idx}.pt')):
             print(f"Skipping batch {batch_idx}; already exists.")
             pl_module.skip_next_batch = True
@@ -84,7 +101,8 @@ class EvalOnDataset(Callback):
             return
 
         batch_dict = outputs['batch_dict']
-        batch_idx = batch[1]['batch_idx']  # for ddp
+        if self.override_batch_idx:
+            batch_idx = batch[1]['batch_idx']  # for ddp
         inverse_norm_batch_dict = self.rainfall_dataset.inverse_normalize_batch(batch_dict)  # tensor
         torch.save(inverse_norm_batch_dict, p.join(self.save_dir, f'batch_{batch_idx}.pt'))
         return
@@ -95,8 +113,6 @@ class EvalOnDataset(Callback):
         files_ = os.listdir(self.save_dir)
         outputs = [f for f in files_ if f.endswith('.pt')]
         batch_size = torch.load(os.path.join(self.save_dir, outputs[0]))['precip_up'].shape[0]
-
-        print(f"HERE, rank = {pl_module.global_rank}")
 
         lpips_model = lpips.LPIPS(net='alex').to(pl_module.device)
 
@@ -169,9 +185,30 @@ class EvalOnDataset(Callback):
         summary_stats.to_csv(p.join(self.save_dir, f'summary_stats_{show_metric_for}.csv'))
         return
 
-    def get_ddp_batch_idx(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", batch: Any,
-                            batch_idx: int):
-        pass
+    @rank_zero_only
+    def on_validation_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
+                                batch: Any, batch_idx: int, dataloader_idx: int = 0) -> None:
+        if not trainer.sanity_checking:
+            self.on_test_batch_end(trainer, pl_module, outputs, batch, batch_idx, dataloader_idx)
+        return
+
+    @rank_zero_only
+    def on_validation_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        if trainer.sanity_checking:
+            return
+        files_ = os.listdir(self.save_dir)
+        outputs = [f for f in files_ if f.endswith('.pt')]
+        batch_size = torch.load(os.path.join(self.save_dir, outputs[0]))['precip_up'].shape[0]
+
+        for f in tqdm(outputs, desc='Saving outputs'):
+            batch_dict = torch.load(p.join(self.save_dir, f))
+            cpc_inter_batch = batch_dict['precip_up'].cpu().detach().numpy()
+            gt_batch = batch_dict['precip_gt'].cpu().detach().numpy()
+            for i in range(batch_size):
+                cpc_inter = cpc_inter_batch[i][0, :, :]
+                gt = gt_batch[i][0, :, :]
+                if self.show_vis:
+                    vis_sample(cpc_inter, cpc_inter, gt, self.vis_dir, f, i)
 
 
 def filter_sample_logic(valid_mask: np.ndarray, logic: str):
