@@ -11,8 +11,8 @@ from natsort import natsorted
 from datetime import datetime
 from lightning.pytorch.callbacks import RichProgressBar, Callback
 from lightning.pytorch.utilities import rank_zero_only
-from src.utils.helper import yprint, monitor_complete
 import lpips
+from src.utils.helper import yprint, monitor_complete, move_batch_to_cpu
 from src.utils.metrics import calc_mae, calc_mse, calc_rmse, calc_pcc, calc_csi, calc_bias, calc_fss, calc_emd, \
     calc_hrre, calc_mppe, calc_lpips, calc_crps
 
@@ -100,7 +100,8 @@ class EvalOnDataset(Callback):
             pl_module.skip_next_batch = False
             return
 
-        batch_dict = outputs['batch_dict']
+        batch_dict = move_batch_to_cpu(outputs['batch_dict'])
+
         if self.override_batch_idx:
             batch_idx = batch[1]['batch_idx']  # for ddp
         inverse_norm_batch_dict = self.rainfall_dataset.inverse_normalize_batch(batch_dict)  # tensor
