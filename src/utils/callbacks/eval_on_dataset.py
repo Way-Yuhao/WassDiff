@@ -189,8 +189,9 @@ class EvalOnDataset(Callback):
     @rank_zero_only
     def on_validation_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
                                 batch: Any, batch_idx: int, dataloader_idx: int = 0) -> None:
-        if not trainer.sanity_checking:
-            self.on_test_batch_end(trainer, pl_module, outputs, batch, batch_idx, dataloader_idx)
+        batch_dict = move_batch_to_cpu(outputs['batch_dict'])
+        # inverse_norm_batch_dict = self.rainfall_dataset.inverse_normalize_batch(batch_dict)  # tensor
+        torch.save(batch_dict, p.join(self.save_dir, f'batch_{batch_idx}.pt'))
         return
 
     @rank_zero_only
