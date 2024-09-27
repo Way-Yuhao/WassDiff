@@ -63,9 +63,9 @@ data:
   stop_at_batch: 26
   data_config:
     image_size: 512
-callbacks:
-  eval_on_dataset:
-    eval_only_on_existing: true
+#callbacks:
+#  eval_on_dataset:
+#    eval_only_on_existing: true
 
 paths:
   output_dir:  ${local.eval_set_root_dir}/${name}

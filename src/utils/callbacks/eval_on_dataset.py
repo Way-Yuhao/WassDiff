@@ -1,6 +1,8 @@
 import os
 import os.path as p
-from typing import Any, Dict, Optional
+import socket
+import traceback
+from typing import Any, Dict, Optional, List, Tuple
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
@@ -12,7 +14,8 @@ from datetime import datetime
 from lightning.pytorch.callbacks import RichProgressBar, Callback
 from lightning.pytorch.utilities import rank_zero_only
 import lpips
-from src.utils.helper import yprint, monitor_complete, move_batch_to_cpu
+from tabulate import tabulate
+from src.utils.helper import yprint, monitor_complete, move_batch_to_cpu, alert
 from src.utils.metrics import calc_mae, calc_mse, calc_rmse, calc_pcc, calc_csi, calc_bias, calc_fss, calc_emd, \
     calc_hrre, calc_mppe, calc_lpips, calc_crps
 
@@ -24,7 +27,7 @@ class EvalOnDataset(Callback):
 
     def __init__(self, save_dir: str, skip_existing: bool, eval_only_on_existing: bool, show_vis: bool,
                  csi_threshold: float, heavy_rain_threshold: float, peak_mesoscale_threshold: float,
-                 override_batch_idx: bool):
+                 override_batch_idx: bool, report_results_on_batch: Optional[List[int]]):
         """
         :param save_dir: Directory to save the outputs
         :param skip_existing: Skip the test loop if the save_dir already contains outputs
@@ -43,9 +46,11 @@ class EvalOnDataset(Callback):
         self.eval_only_on_existing = eval_only_on_existing
         self.show_vis = show_vis
         self.override_batch_idx = override_batch_idx
+        self.report_results_on_batch = report_results_on_batch
         if self.show_vis:
             self.vis_dir = p.join(save_dir, 'vis')
             os.makedirs(self.vis_dir, exist_ok=True)
+        self.hostname = socket.gethostname()
 
         # metrics-related constants
         self.csi_threshold = csi_threshold
@@ -106,85 +111,19 @@ class EvalOnDataset(Callback):
             batch_idx = batch[1]['batch_idx']  # for ddp
         inverse_norm_batch_dict = self.rainfall_dataset.inverse_normalize_batch(batch_dict)  # tensor
         torch.save(inverse_norm_batch_dict, p.join(self.save_dir, f'batch_{batch_idx}.pt'))
+
+        if self.report_results_on_batch is not None:
+            if batch_idx in self.report_results_on_batch:
+                summary_stats, _ = self.compute_metrics(pl_module, save_to_disk=False)
+                self.report_via_slack(trainer, title=f'Preliminary results with {batch_idx + 1} batches',
+                                      content=df_to_markdown_table(summary_stats))
         return
 
     @rank_zero_only
     def on_test_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        show_metric_for = 'ours'  # FIXME: hard coded for now
-        files_ = os.listdir(self.save_dir)
-        outputs = [f for f in files_ if f.endswith('.pt')]
-        batch_size = torch.load(os.path.join(self.save_dir, outputs[0]))['precip_up'].shape[0]
+        summary_stats, _ = self.compute_metrics(pl_module, save_to_disk=True)
+        self.report_via_slack(trainer, title='Test completed', content=df_to_markdown_table(summary_stats))
 
-        lpips_model = lpips.LPIPS(net='alex').to(pl_module.device)
-
-        gt_hist_total, cpc_inter_hist_total, output_hist_total = None, None, None
-        gt_spectra_total, cpc_spectra_total, output_spectral_total = None, None, None
-
-        metrics = []
-        for f in tqdm(outputs, desc='Computing metrics'):
-            batch_dict = torch.load(p.join(self.save_dir, f))
-            cpc_inter_batch = batch_dict['precip_up'].cpu().detach().numpy()
-            output_batch = batch_dict['precip_output'].cpu().detach().numpy()
-            gt_batch = batch_dict['precip_gt'].cpu().detach().numpy()
-            for i in range(batch_size):
-                row = {}
-                cpc_inter = cpc_inter_batch[i][0, :, :]
-                output = output_batch[i][0, :, :]
-                gt = gt_batch[i][0, :, :]
-                valid_mask = gt != -1
-                if not filter_sample_logic(valid_mask, logic='remove_any_invalid'):
-                    continue
-                # TODO: add noise to gt? that would affect pcc and ssim
-
-                if self.show_vis:
-                    vis_sample(cpc_inter, output, gt, self.vis_dir, f, i)
-
-                k = 1
-                pooling_func = 'mean'
-                # if show_metric_for == 'cpc_inter':
-                #     output = cpc_inter  # TODO REMOVE THIS!!!!!
-
-                row['batch'] = f
-                row['index'] = i
-                row['gt_precip_mean'] = np.mean(gt[valid_mask])
-                row['gt_precip_max'] = np.max(gt[valid_mask])
-
-                row['mae'] = calc_mae(output, gt, valid_mask, k=k, pooling_func=pooling_func)
-                row['mse'] = calc_mse(output, gt, valid_mask, k=k, pooling_func=pooling_func)
-                row['rmse'] = calc_rmse(output, gt, valid_mask, k=k, pooling_func=pooling_func)
-                row['pcc'] = calc_pcc(output, gt, valid_mask, k=k, pooling_func=pooling_func)
-                # row['ssim'] = calc_ssim(output, gt)
-                row['csi'] = calc_csi(output, gt, threshold=10, valid_mask=valid_mask, k=k, pooling_func=pooling_func)
-                row['csi_p16'] = calc_csi(output, gt, threshold=10, valid_mask=valid_mask, k=16,
-                                          pooling_func=pooling_func)
-                row['bias'] = calc_bias(output, gt, valid_mask, k=k, pooling_func=pooling_func)
-                row['fss'] = calc_fss(output, gt, threshold=56, k=16)
-                row['emd'] = calc_emd(output, gt, valid_mask)
-                row['hrre'] = calc_hrre(output, gt, hrre_thres=self.heavy_rain_threshold)
-                row['mppe'] = calc_mppe(output, gt, valid_mask)
-                row['lpips'] = calc_lpips(output, gt, lpips_model, pl_module.device)
-                metrics.append(list(row.values()))
-
-                # TODO: build hist
-        metrics_df = pd.DataFrame(metrics, columns=list(row.keys()))
-
-        metrics_df.to_csv(p.join(self.save_dir, f'metrics_{show_metric_for}.csv'))
-        # compute summary statistics, mean of each metric, ignore batch and index
-        summary_stats_mean = metrics_df.iloc[:, 2:].mean()
-        summary_stats_std = metrics_df.iloc[:, 2:].std()
-        print(f'----------------Summary Statistics [{show_metric_for}]----------------')
-        print("Mean:")
-        print(summary_stats_mean)
-        print("Standard Deviation:")
-        print(summary_stats_std)
-        summary_stats = pd.concat([summary_stats_mean, summary_stats_std], axis=1)
-
-        # Name the columns appropriately
-        summary_stats.columns = ['Mean', 'Standard Deviation']
-
-        # Save to csv
-        summary_stats.to_csv(p.join(self.save_dir, f'summary_stats_{show_metric_for}.csv'))
-        return
 
     @rank_zero_only
     def on_validation_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
@@ -213,6 +152,89 @@ class EvalOnDataset(Callback):
                     vis_sample(cpc_inter, cpc_inter, gt, self.vis_dir, f, i)
 
 
+    def compute_metrics(self, pl_module: "pl.LightningModule", save_to_disk: bool = True) \
+            -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """ Computes eval with all batches saved in disk"""
+        show_metric_for = 'ours'  # FIXME: hard coded for now
+        files_ = os.listdir(self.save_dir)
+        outputs = [f for f in files_ if f.endswith('.pt')]
+        batch_size = torch.load(os.path.join(self.save_dir, outputs[0]))['precip_up'].shape[0]
+
+        lpips_model = lpips.LPIPS(net='alex').to(pl_module.device)
+        metrics = []
+        for f in tqdm(outputs, desc='Computing metrics'):
+            batch_dict = torch.load(p.join(self.save_dir, f))
+            cpc_inter_batch = batch_dict['precip_up'].cpu().detach().numpy()
+            output_batch = batch_dict['precip_output'].cpu().detach().numpy()
+            gt_batch = batch_dict['precip_gt'].cpu().detach().numpy()
+            for i in range(batch_size):
+                row = {}
+                cpc_inter = cpc_inter_batch[i][0, :, :]
+                output = output_batch[i][0, :, :]
+                gt = gt_batch[i][0, :, :]
+                valid_mask = gt != -1
+                if not filter_sample_logic(valid_mask, logic='remove_any_invalid'):
+                    continue
+                # TODO: add noise to gt? that would affect pcc and ssim
+
+                if self.show_vis:
+                    vis_sample(cpc_inter, output, gt, self.vis_dir, f, i)
+
+                k = 1
+                pooling_func = 'mean'
+
+                row['batch'] = f
+                row['index'] = i
+                row['gt_precip_mean'] = np.mean(gt[valid_mask])
+                row['gt_precip_max'] = np.max(gt[valid_mask])
+
+                row['mae'] = calc_mae(output, gt, valid_mask, k=k, pooling_func=pooling_func)
+                row['mse'] = calc_mse(output, gt, valid_mask, k=k, pooling_func=pooling_func)
+                row['rmse'] = calc_rmse(output, gt, valid_mask, k=k, pooling_func=pooling_func)
+                row['pcc'] = calc_pcc(output, gt, valid_mask, k=k, pooling_func=pooling_func)
+                # row['ssim'] = calc_ssim(output, gt)
+                row['csi'] = calc_csi(output, gt, threshold=10, valid_mask=valid_mask, k=k, pooling_func=pooling_func)
+                row['csi_p16'] = calc_csi(output, gt, threshold=10, valid_mask=valid_mask, k=16,
+                                          pooling_func=pooling_func)
+                row['bias'] = calc_bias(output, gt, valid_mask, k=k, pooling_func=pooling_func)
+                row['fss'] = calc_fss(output, gt, threshold=56, k=16)
+                row['emd'] = calc_emd(output, gt, valid_mask)
+                row['hrre'] = calc_hrre(output, gt, hrre_thres=self.heavy_rain_threshold)
+                row['mppe'] = calc_mppe(output, gt, valid_mask)
+                row['lpips'] = calc_lpips(output, gt, lpips_model, pl_module.device)
+                metrics.append(list(row.values()))
+
+        metrics_df = pd.DataFrame(metrics, columns=list(row.keys()))
+        if save_to_disk:
+            metrics_df.to_csv(p.join(self.save_dir, f'metrics_{show_metric_for}.csv'))
+        # compute summary statistics, mean of each metric, ignore batch and index
+        summary_stats_mean = metrics_df.iloc[:, 2:].mean()
+        summary_stats_std = metrics_df.iloc[:, 2:].std()
+        print(f'----------------Summary Statistics [{show_metric_for}]----------------')
+        print("Mean:")
+        print(summary_stats_mean)
+        print("Standard Deviation:")
+        print(summary_stats_std)
+        summary_stats = pd.concat([summary_stats_mean, summary_stats_std], axis=1)
+        summary_stats.columns = ['Mean', 'Standard Deviation']
+        summary_stats.index.name = 'metrics'
+
+        # Save to csv
+        if save_to_disk:
+            summary_stats.to_csv(p.join(self.save_dir, f'summary_stats_{show_metric_for}.csv'))
+        return summary_stats, metrics_df
+
+    def report_via_slack(self, trainer: "pl.Trainer", title: str, content: str):
+        device = str(trainer.strategy.root_device)
+        now = datetime.now().replace(microsecond=0)
+        # Prepare the alert message
+        message = (f'*{title}*```{content}```\n'
+                   f'Host: {self.hostname}\nDevice: {device}\nTime: {now}\nPath: {self.save_dir}')
+        # Send the alert using your alert function
+        alert(message)
+        return
+
+################ STATIC METHODS ################
 def filter_sample_logic(valid_mask: np.ndarray, logic: str):
     if logic == 'remove_any_invalid':
         if np.any(~valid_mask):
@@ -359,3 +381,7 @@ def compute_ensemble_metrics(parent_save_dir, save_dir_pattern, show_vis=False, 
     # Save to csv
     summary_stats.to_csv(p.join(ensemble_output_path, f'summary_stats_{ensemble_size}_members.csv'))
     return
+
+
+def df_to_markdown_table(df: pd.DataFrame) -> str:
+    return tabulate(df, headers='keys', tablefmt='github')
