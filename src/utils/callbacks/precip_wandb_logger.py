@@ -17,11 +17,13 @@ from src.utils.helper import wandb_display_grid, cm_, visualize_batch
 class PrecipDataLogger(Callback):
     def __init__(self, train_log_img_freq: int = 1000, train_log_score_freq: int = 1000,
                  train_log_param_freq: int = 1000, show_samples_at_start: bool = False,
-                 show_unconditional_samples: bool = False):
+                 show_unconditional_samples: bool = False, check_freq_via: str = 'global_step'):
         super().__init__()
         # self.train_log_img_freq = train_log_img_freq
         # self.train_log_score_freq = train_log_score_freq
         # self.train_log_param_freq = train_log_param_freq
+        self.check_freq_via = check_freq_via
+        assert self.check_freq_via in ['global_step', 'epoch']
         self.freqs = {'img': train_log_img_freq, 'score': train_log_score_freq, 'param': train_log_param_freq}
         self.next_log_idx = {'img': 0 if show_samples_at_start else train_log_img_freq, 'score': 0, 'param': 0}
         # self.show_samples_at_start = show_samples_at_start
@@ -38,7 +40,11 @@ class PrecipDataLogger(Callback):
         self.first_batch_visualized = False
         return
 
-    def _check_frequency(self, check_idx: int, key: str):
+    def _check_frequency(self, trainer: "pl.trainer", key: str):
+        if self.check_freq_via == 'global_step':
+            check_idx = trainer.global_step
+        elif self.check_freq_via == 'epoch':
+            check_idx = trainer.current_epoch
         if check_idx >= self.next_log_idx[key]:
             self.next_log_idx[key] = check_idx + self.freqs[key]
             return True
@@ -70,13 +76,13 @@ class PrecipDataLogger(Callback):
     def on_validation_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
                                 batch: Any, batch_idx: int, dataloader_idx: int = 0) -> None:
 
-        if self._check_frequency(trainer.global_step, 'img'):
+        if self._check_frequency(trainer, 'img'):
             self._log_samples(trainer, pl_module, outputs)
 
     @rank_zero_only
     def on_train_batch_end(self, trainer: Trainer, pl_module: LightningModule,
                            outputs: Any, batch: Any, batch_idx: int) -> None:
-        if self._check_frequency(trainer.global_step, 'score'):
+        if self._check_frequency(trainer, 'score'):
             self._log_score(pl_module, outputs)
 
     @staticmethod

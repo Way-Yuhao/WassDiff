@@ -115,7 +115,7 @@ class EvalOnDataset(Callback):
         if self.report_results_on_batch is not None:
             if batch_idx in self.report_results_on_batch:
                 summary_stats, _ = self.compute_metrics(pl_module, save_to_disk=False)
-                self.report_via_slack(trainer, title=f'Preliminary results with {batch_idx + 1} batches',
+                self.report_via_slack(trainer, title=f'Preliminary test results with {batch_idx + 1} batches',
                                       content=df_to_markdown_table(summary_stats))
         return
 

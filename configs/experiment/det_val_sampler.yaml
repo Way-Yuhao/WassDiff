@@ -1,6 +1,6 @@
 # @package _global_
 
-#data:
+data:
   use_val_samples_from: ${paths.data_dir}/rainfall_eval/val_det_samples_256
   dataloader_mode: train_det_val
 #trainer:
