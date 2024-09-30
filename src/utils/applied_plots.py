@@ -9,15 +9,16 @@ import pandas as pd
 import torch
 from hydra import compose, initialize
 from natsort import natsorted
-from tqdm import trange
 import rootutils
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
+from tqdm import tqdm
 from src.data.cpc_mrms_dataset import DailyAggregateRainfallDataset
 from scipy.stats.mstats import winsorize
 import ast
 from src.utils.callbacks.eval_on_dataset import compute_ensemble_metrics
+from src.utils.plot_func import filter_sample_logic, build_histogram_for_sample, build_power_spectral_for_sample
 
 """
 META ANALYSIS PLOTS
@@ -360,14 +361,155 @@ def skill_vs_ensemble_size():
     plt.show()
 
 
+def build_hist_for_all_methods(ensemble_size: int, graph_to_build: str):
+    """
+    Build histograms for all methods
+    :param ensemble_size: number of ensemble members
+    :param graph_to_build: 'hist' or 'spectra'
+    """
+    print('Building histograms for all methods with ensemble size ', ensemble_size)
+    sns.set_context('paper', font_scale=1.5)
+
+    out_dir = '/home/yl241/data/rainfall_eval_LiT/general'
+    if not p.exists(out_dir):
+        os.makedirs(out_dir)
+        print(f'Created directory: {out_dir}')
+    all_methods = {
+        'Ours': '/home/yl241/data/rainfall_eval/logp1_emd_ckpt21',
+        # 'Ours-': '/home/yl241/data/rainfall_eval/logp1_ckpt22',
+        'Ours-': '/home/yl241/data/rainfall_eval/sbdm_r',
+        'CNN': '/home/yl241/data/rainfall_eval/cnn_baseline_r21ckpt'
+    }
+    label_colors = {
+        'Ours': 'tab:blue',
+        'Ours-': 'tab:purple',
+        'CNN': 'tab:green',
+        'CPC_Int': 'tab:orange',
+        'Ground Truth': 'black'
+    }
+
+    ig, ax = plt.subplots(figsize=(8, 5))
+    for method, method_dir in all_methods.items():
+        hist_total = None
+        spectra_total = None
+        if method == 'Ours-' or method == 'Ours':
+            files = []
+            for i in range(1, ensemble_size+1):
+                if i > 1:
+                    method_dir_ = method_dir + f'_{i}'
+                else:
+                    method_dir_ = method_dir
+                additional_files = os.listdir(method_dir_)
+                additional_files = [p.join(method_dir_, f) for f in additional_files if f.endswith('.pt')]
+                files += additional_files
+
+        else:
+            files = os.listdir(method_dir)
+            files = [p.join(method_dir, f) for f in files if f.endswith('.pt')]
+        batch_size = torch.load(files[0])['precip_up'].shape[0]
+        for f in tqdm(files, desc=f'Building histograms for {method}'):
+            batch_dict = torch.load(f)
+            output_batch = batch_dict['precip_output'].cpu().detach().numpy()
+            gt_batch = batch_dict['precip_gt'].cpu().detach().numpy()
+            for i in range(batch_size):
+                output = output_batch[i][0, :, :]
+                gt = gt_batch[i][0, :, :]
+                valid_mask = gt != -1
+                if not filter_sample_logic(valid_mask, logic='remove_any_invalid'):
+                    continue
+                hist_output, bin_edges_output = build_histogram_for_sample(output[valid_mask])
+                spectra_output, freq = build_power_spectral_for_sample(output)
+                if hist_total is None:
+                    hist_total = hist_output
+                    spectra_total = spectra_output
+                else:
+                    hist_total += hist_output
+                    spectra_total += spectra_output
+
+        if graph_to_build == 'hist': # build histograms
+            # normalize histograms to convert to pdf
+            hist_total = hist_total / hist_total.sum()
+            ax.plot(bin_edges_output[:-1], hist_total, label=method, color=label_colors[method], linewidth=2)
+        elif graph_to_build == 'spectra':  # build power spectral density plot
+            if method in ['Ours', 'Ours-']:
+                ax.plot(freq, spectra_total / ensemble_size, label=method, color=label_colors[method], linewidth=2)
+            else:
+                ax.plot(freq, spectra_total, label=method, color=label_colors[method], linewidth=2)
+    # handle ours and cpc_int
+    gt_hist_total, cpc_inter_hist_total, output_hist_total = None, None, None
+    gt_spectra_total, cpc_spectra_total, output_spectral_total = None, None, None
+    files = os.listdir(all_methods['Ours'])
+    files = [f for f in files if f.endswith('.pt')]
+    batch_size = torch.load(os.path.join(all_methods['Ours'], files[0]))['precip_up'].shape[0]
+    for f in tqdm(files, desc=f'Building histograms for CPC and MRMS'):
+        batch_dict = torch.load(p.join(method_dir, f))
+        cpc_inter_batch = batch_dict['precip_up'].cpu().detach().numpy()
+        gt_batch = batch_dict['precip_gt'].cpu().detach().numpy()
+        for i in range(batch_size):
+            cpc_inter = cpc_inter_batch[i][0, :, :]
+            gt = gt_batch[i][0, :, :]
+            valid_mask = gt != -1
+            if not filter_sample_logic(valid_mask, logic='remove_any_invalid'):
+                continue
+            hist_gt, bin_edges_gt = build_histogram_for_sample(gt[valid_mask])
+            hist_cpc, bin_edges_cpc = build_histogram_for_sample(cpc_inter[valid_mask])
+            spectra_cpc, freq = build_power_spectral_for_sample(cpc_inter)
+            spectra_gt, _ = build_power_spectral_for_sample(gt)
+            if gt_hist_total is None:
+                gt_hist_total = hist_gt
+                cpc_inter_hist_total = hist_cpc
+                gt_spectra_total = spectra_gt
+                cpc_spectra_total = spectra_cpc
+            else:
+                gt_hist_total += hist_gt
+                cpc_inter_hist_total += hist_cpc
+                gt_spectra_total += spectra_gt
+                cpc_spectra_total += spectra_cpc
+
+    if graph_to_build == 'hist': # normalize histograms to convert to pdf
+        gt_hist_total = gt_hist_total / gt_hist_total.sum()
+        cpc_inter_hist_total = cpc_inter_hist_total / cpc_inter_hist_total.sum()
+        # build histograms
+        ax.plot(bin_edges_gt[:-1], gt_hist_total, label='Ground Truth', color=label_colors['Ground Truth'], linewidth=2)
+        ax.plot(bin_edges_cpc[:-1], cpc_inter_hist_total, label='CPC_Int', color=label_colors['CPC_Int'], linewidth=2)
+    elif graph_to_build == 'spectra':
+        # build power spectral density plot
+        ax.plot(freq, gt_spectra_total, label='Ground Truth', color=label_colors['Ground Truth'], linewidth=2)
+        ax.plot(freq, cpc_spectra_total, label='CPC_Int', color=label_colors['CPC_Int'], linewidth=2)
+
+    if graph_to_build == 'hist': # histogram
+        ax.set_xlabel('Rainfall intensity (mm/day)')
+        ax.set_ylabel('PDF')
+        ax.set_yscale('log')  # Set log scale for y-axis
+        # ax.set_title('Histograms')
+        # ax.legend()
+        sns.despine()
+        plt.savefig(p.join(out_dir, 'histograms_r.pdf'))
+        plt.show()
+        plt.close()
+    elif graph_to_build == 'spectra': # power spectral density
+        ax.set_xlabel('Frequency (1/km)')
+        ax.set_ylabel('Power Spectra')
+        ax.set_xscale('log')  # Set log scale for x-axis
+        ax.set_yscale('log')  # Set log scale for y-axis
+        # ax.set_title('Power Spectra')
+        # ax.legend()
+        sns.despine()
+        plt.savefig(p.join(out_dir, 'spectra_r.pdf'))
+        plt.show()
+        plt.close()
+
 def main():
     # plot_qq_ensemble(16, '/home/yl241/workspace/NCSN/plt/qq')
     # dist_output_specific_sample()
     # dist_mean_prior()
     # dist_mean_val_set()
     # show_sde_trajectory()
-    skill_vs_ensemble_size()
+    # skill_vs_ensemble_size()
 
+    # hist and spectra
+    build_hist_for_all_methods(ensemble_size=13, graph_to_build='hist')
+    build_hist_for_all_methods(ensemble_size=13, graph_to_build='spectra')
 
 if __name__ == '__main__':
     main()

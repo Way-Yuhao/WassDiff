@@ -1,12 +1,12 @@
-from typing import Dict, List
-import os
+# from typing import Dict, List
+# import os
 import os.path as p
 import numpy as np
 from matplotlib import pyplot as plt
 import seaborn as sns
 import pandas as pd
-import torch
-from src.utils.pysteps.spectral import rapsd
+# import torch
+from src.utils.pysteps.spectral import rapsd, remove_rain_norain_discontinuity
 
 
 def plot_error_map(output, gt, save_dir, suffix=None):
@@ -231,3 +231,36 @@ def plot_psd_ensemble(batch, num_samples, save_dir):
         plt.show()
     plt.close()
     return
+
+def build_histogram_for_sample(data, bins=100, range_=(0, 300)):
+    """
+    Calculate the histogram for the given data
+    :param data: input data, should be a numpy array
+    :param bins: number of bins to use for the histogram
+    :param range_: range of values to include in the histogram
+    :return: histogram and the corresponding bin edges
+    """
+    hist, bin_edges = np.histogram(data, bins=bins, range=range_)
+    return hist, bin_edges
+
+def build_power_spectral_for_sample(data):
+    """
+    Calculate the radially-averaged power spectral density for the given data
+    :param data: input data, should be a numpy array
+    :return: power spectral density
+    """
+    # normalized_data = data.copy() - data.mean()
+    if data.std() > 0:  # TODO: verify this
+        data = remove_rain_norain_discontinuity(data)
+    out, freq = rapsd(data, return_freq=True, fft_method=np.fft, normalize=False)
+    return out, freq
+
+
+def filter_sample_logic(valid_mask: np.ndarray, logic: str):
+    if logic == 'remove_any_invalid':
+        if np.any(~valid_mask):
+            return False
+    if logic == 'remove_all_invalid':
+        if np.all(~valid_mask):
+            return False
+    return True
