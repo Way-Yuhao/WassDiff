@@ -5,20 +5,19 @@ import os.path as p
 from typing import Tuple, Dict, Hashable
 from hydra import compose, initialize
 import numpy as np
-import cv2
 import xarray as xr
 import torch
 from numpy import ndarray
 from torch.utils.data import Dataset, DataLoader, random_split, SubsetRandomSampler
 from natsort import natsorted
-from datetime import datetime
+import time
+import datetime as dt
 import re
 import pandas as pd
 from matplotlib import pyplot as plt
 from src.utils.helper import deprecated, yprint, rprint, InfiniteLoader, get_training_progressbar
 from src.utils.cpc_utils import read_cpc_file_from, read_cpc_gz_file_from, generate_mrms_dailyagg_12z
-import time
-import datetime as dt
+
 
 
 def get_precip_era5_dataset(config, eval_num_worker=None, eval_batch_size=None):

@@ -4,14 +4,13 @@ import torch
 import torch.nn.functional as F
 from torchvision.utils import make_grid
 from lightning import LightningModule, Trainer
-from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.utilities.types import STEP_OUTPUT
 from lightning.pytorch.utilities import rank_zero_only
 import wandb
 from matplotlib import pyplot as plt
 from lightning.pytorch.callbacks import RichProgressBar, Callback
-from rich.progress import Progress
 from src.utils.helper import wandb_display_grid, cm_, visualize_batch
+from src.utils.metrics import calc_mae, calc_bias
 
 
 class PrecipDataLogger(Callback):
@@ -152,15 +151,25 @@ class PrecipDataLogger(Callback):
         sample = self.rainfall_dataset.inverse_normalize_precip(sample)
         gt = self.rainfall_dataset.inverse_normalize_precip(gt)
 
-        concat_samples = torch.cat(
-            (low_res_display[0:s, :, :, :], sample[0:s, :, :, :], gt[0:s, :, :, :]), dim=0)
-        grid = make_grid(concat_samples, nrow=s)
-        grid_mono = grid[0, :, :].unsqueeze(0)
-        cm_grid = cm_(grid_mono.detach().cpu(), vmin=0, vmax=max(low_res_display.max(), gt.max()))
-        images = wandb.Image(cm_grid, caption='conditional generation [rainfall / output / gt]')
-        wandb.log({"val/conditional_samples": images}) #, step=pl_module.global_step)
+
+        # log unscaled samples
+        # concat_samples = torch.cat(
+        #     (low_res_display[0:s, :, :, :], sample[0:s, :, :, :], gt[0:s, :, :, :]), dim=0)
+        # grid = make_grid(concat_samples, nrow=s)
+        # grid_mono = grid[0, :, :].unsqueeze(0)
+        # cm_grid = cm_(grid_mono.detach().cpu(), vmin=0, vmax=max(low_res_display.max(), gt.max()))
+        # images = wandb.Image(cm_grid, caption='conditional generation [rainfall / output / gt]')
+        # wandb.log({"val/conditional_samples": images}) #, step=pl_module.global_step)
+
         self.log_conditional_samples_scaled(low_res_display, sample, gt, n=s)
 
+        # log sample metrics
+        mae =  calc_mae(sample.cpu().detach().numpy(), gt[0:s, :, :, :].cpu().detach().numpy(), valid_mask=None, k=1,
+                        pooling_func='mean')
+        bias = calc_bias(sample.cpu().detach().numpy(), gt[0:s, :, :, :].cpu().detach().numpy(), valid_mask=None, k=1,
+                         pooling_func='mean')
+        wandb.log({'val/sample_mae': mae, 'val/sample_bias': bias})
+        
         self._revert_pbar_desc(pbar_taskid, original_pbar_desc)
         return
 
