@@ -168,7 +168,7 @@ class PrecipDataLogger(Callback):
                         pooling_func='mean')
         bias = calc_bias(sample.cpu().detach().numpy(), gt[0:s, :, :, :].cpu().detach().numpy(), valid_mask=None, k=1,
                          pooling_func='mean')
-        wandb.log({'val/sample_mae': mae, 'val/sample_bias': bias})
+        wandb.log({'val/sample_mae': mae, 'val/sample_bias': bias, 'epoch': trainer.current_epoch})
         
         self._revert_pbar_desc(pbar_taskid, original_pbar_desc)
         return

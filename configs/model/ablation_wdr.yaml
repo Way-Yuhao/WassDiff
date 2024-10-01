@@ -1,0 +1,8 @@
+defaults:
+  - wassdiff
+  - _self_
+
+model_config:
+  training:
+    use_emd: false
+    emd_weight: 0.0

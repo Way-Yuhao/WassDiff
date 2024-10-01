@@ -1,5 +1,6 @@
 # @package _global_
 
+#### enable this during training
 data:
   use_val_samples_from: ${paths.data_dir}/rainfall_eval/val_det_samples_256
   dataloader_mode: train_det_val
@@ -7,7 +8,9 @@ data:
 #  limit_train_batches: 2
 #  check_val_every_n_epoch: 1
 
+####################
 
+#### enable lines below prior to training to generate eval samples
 # generate an existing set of eval samples
 #model:
 #  bypass_sampling: true # do not save output
