@@ -1,0 +1,10 @@
+# @package _global_
+
+defaults:
+  - override /model: baseline_corrector_gan
+  - _self_
+
+logger:
+  wandb:
+    project: "WassDiff-Baselines"
+    name: 'CorrectorGan debug'

@@ -1,0 +1,35 @@
+# taken from notebooks/export_experiment_args.ipynb -> CorrectorGan (cell 2)
+_target_: src.models.baselines.corrector_gan.lit_module.CorrectorGan
+generator:
+  _target_: src.models.baselines.corrector_gan.models.CorrectorGen2
+  _partial_: true
+discriminator:
+  _target_: src.models.baselines.corrector_gan.models.LeinDisc
+  _partial_: true
+
+noise_shape: [6, 1, 16, 16]
+input_channels: 6
+zero_noise: false
+
+opt_hparams:
+  gen_optimiser: 'adam'
+  disc_optimiser: 'adam'
+  disc_lr: 5e-5
+  gen_lr: 5e-5
+  gen_freq: 1
+  disc_freq: 5
+  b1: 0.0
+  b2: 0.9
+
+loss_hparams:
+  gen_loss:
+    wasserstein: 1
+    ens_mean_lr_corrected_l1: 20
+    ens_mean_L1_weighted: 20
+  disc_loss:
+    wasserstein: 1
+    gradient_penalty: 10
+
+val_hparams:
+    val_nens: 10
+
