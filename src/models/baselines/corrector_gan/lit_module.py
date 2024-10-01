@@ -1,3 +1,4 @@
+from typing import Any, Dict, Tuple, Optional
 import numpy as np
 import torch
 from torch import nn
@@ -14,6 +15,7 @@ from src.utils.corrector_gan_utils.utils import tqdm, device
 from src.models.baselines.corrector_gan.layers import *
 from src.utils.corrector_gan_utils.dataloader import log_retrans
 from src.utils.corrector_gan_utils.loss import *
+from src.utils.ncsn_utils import datasets as datasets
 
 
 class CorrectorGan(LightningModule):
@@ -23,7 +25,8 @@ class CorrectorGan(LightningModule):
                  opt_hparams={'gen_optimiser': 'adam', 'disc_optimiser': 'adam', 'disc_lr': 1e-4, 'gen_lr': 1e-4,
                               'gen_freq': 1, 'disc_freq': 5, 'b1': 0.0, 'b2': 0.9},
                  loss_hparams={'disc_loss': "wasserstein", 'gen_loss': "wasserstein", 'lambda_gp': 10},
-                 val_hparams={'val_nens': 10, 'tp_log': 0.01, 'ds_max': 50, 'ds_min': 0}):  # fill in
+                 val_hparams={'val_nens': 10, 'tp_log': 0.01, 'ds_max': 50, 'ds_min': 0},
+                 model_config: Dict = {}, automatic_optimization: bool = False):  # fill in
         super().__init__()
 
         self.noise_shape = noise_shape
@@ -43,140 +46,20 @@ class CorrectorGan(LightningModule):
         if gen_spectral_norm:
             self.gen.apply(self.add_sn)
 
+        # additional params absent in the original code
+        self.automatic_optimization = automatic_optimization
+        self.model_config = model_config
+
         self.save_hyperparameters()
 
-    def add_sn(self, m):
-        if isinstance(m, (nn.Conv2d, nn.Linear, nn.ConvTranspose2d)):
-            nn.utils.spectral_norm(m)
-        else:
-            m
-
-    def forward(self, condition, noise):
-        return self.gen(condition, noise)
-
-    def training_step(self, batch, batch_idx, optimizer_idx):
-
-        condition, real = batch[self.cond_idx], batch[self.real_idx]
-
-        if self.global_step % 500 == 0:
-            self.gen.eval()
-            noise = torch.randn(real.shape[0], *self.noise_shape[-3:], device=self.device)
-            #         # log sampled images
-            sample_imgs, sample_corrected_lrs = self.gen(condition, noise)
-            sample_imgs = torch.cat([real, sample_imgs], dim=0)
-            #                 print(sample_imgs.shape)
-            grid = torchvision.utils.make_grid(sample_imgs)
-            self.logger.experiment.add_image('generated_images', grid, self.global_step)
-            sample_corrected_lrs = torch.cat(
-                [self.upsample_input(F.interpolate(real, scale_factor=0.125, mode='bilinear', align_corners=False)),
-                 self.upsample_input(condition[:, 0:1, :, :]), self.upsample_input(sample_corrected_lrs)], dim=0)
-            grid = torchvision.utils.make_grid(sample_corrected_lrs)
-            self.logger.experiment.add_image('corrected_lr_forecasts', grid, self.global_step)
-
-            if self.input_channels > 1:
-                input_forcasts = self.upsample_input(condition)
-                #                     print(input_forcasts.view(-1, input_forcasts.shape[2], input_forcasts.shape[3]).unsqueeze(1).shape)
-                grid = torchvision.utils.make_grid(
-                    input_forcasts.view(-1, input_forcasts.shape[2], input_forcasts.shape[3]).unsqueeze(1),
-                    nrow=self.input_channels)
-            else:
-                grid = torchvision.utils.make_grid(condition)
-            self.logger.experiment.add_image('input_images', grid, self.global_step)
-            self.gen.train()
-
-        #         # train discriminator
-        if optimizer_idx == 0:
-            if self.zero_noise:
-                noise = torch.zeros(real.shape[0], *self.noise_shape[-3:], device=self.device)
-            else:
-                noise = torch.randn(real.shape[0], *self.noise_shape[-3:], device=self.device)
-            disc_real = self.disc(condition, real).reshape(-1)
-            if len(noise.shape) == 5:
-                fake = []
-                disc_fake = []
-                corrected_lr = []
-                for i in range(noise.shape[1]):
-                    noise_sample = noise[:, i, :, :, :]
-                    fake_temp, corrected_lr_temp = self.gen(condition, noise_sample)
-                    disc_fake_temp = self.disc(condition, fake_temp).reshape(-1)
-                    fake.append(fake_temp)
-                    disc_fake.append(disc_fake_temp)
-                    corrected_lr.append(corrected_lr_temp)
-                fake = torch.stack(fake, dim=0)
-                disc_fake = torch.stack(disc_fake, dim=0)
-                corrected_lr = torch.stack(corrected_lr, dim=0)
-            else:
-                fake, corrected_lr = self.gen(condition, noise)
-                disc_fake = self.disc(condition, fake).reshape(-1)
-
-            loss_disc = torch.tensor(0.0).to(self.device)
-
-            if "wasserstein" in self.loss_hparams['disc_loss']:
-                loss_disc += self.loss_hparams['disc_loss']["wasserstein"] * disc_wasserstein(disc_real, disc_fake)
-
-            if "hinge" in self.loss_hparams['disc_loss']:
-                loss_disc += self.loss_hparams['disc_loss']["hinge"] * disc_hinge(disc_real, disc_fake)
-
-            if "gradient_penalty" in self.loss_hparams['disc_loss']:
-                loss_disc += self.loss_hparams['disc_loss']["gradient_penalty"] * gradient_penalty(self.disc, condition,
-                                                                                                   real, fake,
-                                                                                                   self.device)
-
-            self.log('discriminator_loss', loss_disc, on_epoch=True, on_step=True, prog_bar=True, logger=True)
-            return loss_disc
-
-        #         #train generator
-        elif optimizer_idx == 1:
-            #             print(self.gen.training)
-            if self.zero_noise:
-                noise = torch.zeros(real.shape[0], *self.noise_shape, device=self.device)
-            else:
-                noise = torch.randn(real.shape[0], *self.noise_shape, device=self.device)
-            if len(noise.shape) == 5:
-                fake = []
-                disc_fake = []
-                corrected_lr = []
-                for i in range(noise.shape[1]):
-                    noise_sample = noise[:, i, :, :, :]
-                    fake_temp, corrected_lr_temp = self.gen(condition, noise_sample)
-                    disc_fake_temp = self.disc(condition, fake_temp).reshape(-1)
-                    fake.append(fake_temp)
-                    disc_fake.append(disc_fake_temp)
-                    corrected_lr.append(corrected_lr_temp)
-                fake = torch.stack(fake, dim=0)
-                disc_fake = torch.stack(disc_fake, dim=0)
-                corrected_lr = torch.stack(corrected_lr, dim=0)
-
-            else:
-                fake, corrected_lr = self.gen(condition, noise)
-                disc_fake = self.disc(condition, fake).reshape(-1)
-
-            loss_gen = torch.tensor(0.0).to(self.device)
-
-            if "wasserstein" in self.loss_hparams['gen_loss']:
-                loss_gen += self.loss_hparams['gen_loss']["wasserstein"] * gen_wasserstein(disc_fake)
-
-            if "non_saturating" in self.loss_hparams['gen_loss']:
-                loss_gen += self.loss_hparams['gen_loss']["non_saturating"] * gen_logistic_nonsaturating(disc_fake)
-
-            if "ens_mean_L1_weighted" in self.loss_hparams['gen_loss']:
-                loss_gen += self.loss_hparams['gen_loss']["ens_mean_L1_weighted"] * gen_ens_mean_L1_weighted(fake, real)
-
-            if "lr_corrected_skill" in self.loss_hparams['gen_loss']:
-                loss_gen += self.loss_hparams['gen_loss']["lr_corrected_skill"] * gen_lr_corrected_skill(corrected_lr,
-                                                                                                         real)
-
-            if "lr_corrected_l1" in self.loss_hparams['gen_loss']:
-                loss_gen += self.loss_hparams['gen_loss']["lr_corrected_l1"] * gen_lr_corrected_l1(corrected_lr, real)
-
-            if "ens_mean_lr_corrected_l1" in self.loss_hparams['gen_loss']:
-                loss_gen += self.loss_hparams['gen_loss']["ens_mean_lr_corrected_l1"] * gen_ens_mean_lr_corrected_l1(
-                    corrected_lr, real)
-
-            self.log('generator_loss', loss_gen, on_epoch=True, on_step=True, prog_bar=True, logger=True)
-            return loss_gen
-
     def configure_optimizers(self):
+
+        ### additional steps related to WassDiff dataset
+        # Create data normalizer and its inverse
+        self.scaler = datasets.get_data_scaler(self.model_config)
+        self.inverse_scaler = datasets.get_data_inverse_scaler(self.model_config)
+        #######
+
         if self.opt_hparams['gen_optimiser'] == 'adam':
             gen_opt = optim.Adam(self.gen.parameters(), eps=5e-5, lr=self.opt_hparams['gen_lr'],
                                  betas=(self.opt_hparams['b1'], self.opt_hparams['b2']), weight_decay=1e-4)
@@ -194,55 +77,300 @@ class CorrectorGan(LightningModule):
                                  momentum=self.opt_hparams['disc_momentum'])
         else:
             raise NotImplementedError
-        return [{"optimizer": disc_opt, "frequency": self.opt_hparams['disc_freq']},
-                {"optimizer": gen_opt, "frequency": self.opt_hparams['gen_freq']}]
+        # return [{"optimizer": disc_opt, "frequency": self.opt_hparams['disc_freq']},
+        #         {"optimizer": gen_opt, "frequency": self.opt_hparams['gen_freq']}]
+        return [disc_opt, gen_opt]
 
-    def validation_step(self, batch, batch_idx):
+    def add_sn(self, m):
+        if isinstance(m, (nn.Conv2d, nn.Linear, nn.ConvTranspose2d)):
+            nn.utils.spectral_norm(m)
+        else:
+            m
 
-        x, y = batch[self.cond_idx], batch[self.real_idx]
+    def forward(self, condition, noise):
+        return self.gen(condition, noise)
 
-        preds = []
+    # def training_step(self, batch: Dict[str, torch.Tensor], batch_idx: int):
+    #
+    #     batch_dict, _ = batch
+    #     condition, real = self._generate_condition(batch_dict)
+    #
+    #     # condition, real = batch[self.cond_idx], batch[self.real_idx]
+    #
+    #     # log image
+    #     # if self.global_step % 500 == 0:
+    #     #     self.gen.eval()
+    #     #     noise = torch.randn(real.shape[0], *self.noise_shape[-3:], device=self.device)
+    #     #     #         # log sampled images
+    #     #     sample_imgs, sample_corrected_lrs = self.gen(condition, noise)
+    #     #     sample_imgs = torch.cat([real, sample_imgs], dim=0)
+    #     #     #                 print(sample_imgs.shape)
+    #     #     grid = torchvision.utils.make_grid(sample_imgs)
+    #     #     self.logger.experiment.add_image('generated_images', grid, self.global_step)
+    #     #     sample_corrected_lrs = torch.cat(
+    #     #         [self.upsample_input(F.interpolate(real, scale_factor=0.125, mode='bilinear', align_corners=False)),
+    #     #          self.upsample_input(condition[:, 0:1, :, :]), self.upsample_input(sample_corrected_lrs)], dim=0)
+    #     #     grid = torchvision.utils.make_grid(sample_corrected_lrs)
+    #     #     self.logger.experiment.add_image('corrected_lr_forecasts', grid, self.global_step)
+    #     #
+    #     #     if self.input_channels > 1:
+    #     #         input_forcasts = self.upsample_input(condition)
+    #     #         #                     print(input_forcasts.view(-1, input_forcasts.shape[2], input_forcasts.shape[3]).unsqueeze(1).shape)
+    #     #         grid = torchvision.utils.make_grid(
+    #     #             input_forcasts.view(-1, input_forcasts.shape[2], input_forcasts.shape[3]).unsqueeze(1),
+    #     #             nrow=self.input_channels)
+    #     #     else:
+    #     #         grid = torchvision.utils.make_grid(condition)
+    #     #     self.logger.experiment.add_image('input_images', grid, self.global_step)
+    #     #     self.gen.train()
+    #
+    #     #         # train discriminator
+    #     if optimizer_idx == 0:
+    #         if self.zero_noise:
+    #             noise = torch.zeros(real.shape[0], *self.noise_shape[-3:], device=self.device)
+    #         else:
+    #             noise = torch.randn(real.shape[0], *self.noise_shape[-3:], device=self.device)
+    #         disc_real = self.disc(condition, real).reshape(-1)
+    #         if len(noise.shape) == 5:
+    #             fake = []
+    #             disc_fake = []
+    #             corrected_lr = []
+    #             for i in range(noise.shape[1]):
+    #                 noise_sample = noise[:, i, :, :, :]
+    #                 fake_temp, corrected_lr_temp = self.gen(condition, noise_sample)
+    #                 disc_fake_temp = self.disc(condition, fake_temp).reshape(-1)
+    #                 fake.append(fake_temp)
+    #                 disc_fake.append(disc_fake_temp)
+    #                 corrected_lr.append(corrected_lr_temp)
+    #             fake = torch.stack(fake, dim=0)
+    #             disc_fake = torch.stack(disc_fake, dim=0)
+    #             corrected_lr = torch.stack(corrected_lr, dim=0)
+    #         else:
+    #             fake, corrected_lr = self.gen(condition, noise)
+    #             disc_fake = self.disc(condition, fake).reshape(-1)
+    #
+    #         loss_disc = torch.tensor(0.0).to(self.device)
+    #
+    #         if "wasserstein" in self.loss_hparams['disc_loss']:
+    #             loss_disc += self.loss_hparams['disc_loss']["wasserstein"] * disc_wasserstein(disc_real, disc_fake)
+    #
+    #         if "hinge" in self.loss_hparams['disc_loss']:
+    #             loss_disc += self.loss_hparams['disc_loss']["hinge"] * disc_hinge(disc_real, disc_fake)
+    #
+    #         if "gradient_penalty" in self.loss_hparams['disc_loss']:
+    #             loss_disc += self.loss_hparams['disc_loss']["gradient_penalty"] * gradient_penalty(self.disc, condition,
+    #                                                                                                real, fake,
+    #                                                                                                self.device)
+    #
+    #         self.log('discriminator_loss', loss_disc, on_epoch=True, on_step=True, prog_bar=True, logger=True)
+    #         return loss_disc
+    #
+    #     #         #train generator
+    #     elif optimizer_idx == 1:
+    #         #             print(self.gen.training)
+    #         if self.zero_noise:
+    #             noise = torch.zeros(real.shape[0], *self.noise_shape, device=self.device)
+    #         else:
+    #             noise = torch.randn(real.shape[0], *self.noise_shape, device=self.device)
+    #         if len(noise.shape) == 5:
+    #             fake = []
+    #             disc_fake = []
+    #             corrected_lr = []
+    #             for i in range(noise.shape[1]):
+    #                 noise_sample = noise[:, i, :, :, :]
+    #                 fake_temp, corrected_lr_temp = self.gen(condition, noise_sample)
+    #                 disc_fake_temp = self.disc(condition, fake_temp).reshape(-1)
+    #                 fake.append(fake_temp)
+    #                 disc_fake.append(disc_fake_temp)
+    #                 corrected_lr.append(corrected_lr_temp)
+    #             fake = torch.stack(fake, dim=0)
+    #             disc_fake = torch.stack(disc_fake, dim=0)
+    #             corrected_lr = torch.stack(corrected_lr, dim=0)
+    #
+    #         else:
+    #             fake, corrected_lr = self.gen(condition, noise)
+    #             disc_fake = self.disc(condition, fake).reshape(-1)
+    #
+    #         loss_gen = torch.tensor(0.0).to(self.device)
+    #
+    #         if "wasserstein" in self.loss_hparams['gen_loss']:
+    #             loss_gen += self.loss_hparams['gen_loss']["wasserstein"] * gen_wasserstein(disc_fake)
+    #
+    #         if "non_saturating" in self.loss_hparams['gen_loss']:
+    #             loss_gen += self.loss_hparams['gen_loss']["non_saturating"] * gen_logistic_nonsaturating(disc_fake)
+    #
+    #         if "ens_mean_L1_weighted" in self.loss_hparams['gen_loss']:
+    #             loss_gen += self.loss_hparams['gen_loss']["ens_mean_L1_weighted"] * gen_ens_mean_L1_weighted(fake, real)
+    #
+    #         if "lr_corrected_skill" in self.loss_hparams['gen_loss']:
+    #             loss_gen += self.loss_hparams['gen_loss']["lr_corrected_skill"] * gen_lr_corrected_skill(corrected_lr,
+    #                                                                                                      real)
+    #
+    #         if "lr_corrected_l1" in self.loss_hparams['gen_loss']:
+    #             loss_gen += self.loss_hparams['gen_loss']["lr_corrected_l1"] * gen_lr_corrected_l1(corrected_lr, real)
+    #
+    #         if "ens_mean_lr_corrected_l1" in self.loss_hparams['gen_loss']:
+    #             loss_gen += self.loss_hparams['gen_loss']["ens_mean_lr_corrected_l1"] * gen_ens_mean_lr_corrected_l1(
+    #                 corrected_lr, real)
+    #
+    #         self.log('generator_loss', loss_gen, on_epoch=True, on_step=True, prog_bar=True, logger=True)
+    #         return loss_gen
+
+    def training_step(self, batch: Any, batch_idx: int):
+        # Initialize step counter if not already present
+        # if not hasattr(self, 'step_count'):
+        #     self.step_count = 0
+        # self.step_count += 1
+
+        # Get optimizers
+        opt_g, opt_d = self.optimizers()
+
+        batch_dict, _ = batch
+        condition, real = self._generate_condition(batch_dict)
+        condition = self._downscale_condition(condition)
+
+        # Update discriminator
+        for _ in range(self.opt_hparams['disc_freq']):
+            # Zero gradients for discriminator
+            opt_d.zero_grad()
+
+            # Generate fake data
+            noise = torch.randn(real.shape[0], *self.noise_shape[-3:], device=self.device)
+            fake, _ = self.gen(condition, noise)
+
+            # Compute discriminator outputs
+            disc_real = self.disc(condition, real).reshape(-1)
+            disc_fake = self.disc(condition, fake.detach()).reshape(-1)
+
+            # Compute discriminator loss
+            loss_disc = self.compute_discriminator_loss(disc_real, disc_fake, condition, real, fake)
+
+            # Backward and optimize discriminator
+            self.manual_backward(loss_disc)
+            opt_d.step()
+
+            # Log discriminator loss
+            self.log('discriminator_loss', loss_disc, on_epoch=True, on_step=True, prog_bar=True, logger=True)
+
+        # Update generator
+        for _ in range(self.opt_hparams['gen_freq']):
+            # Zero gradients for generator
+            opt_g.zero_grad()
+
+            # Generate fake data
+            noise = torch.randn(real.shape[0], *self.noise_shape[-3:], device=self.device)
+            fake, corrected_lr = self.gen(condition, noise)
+
+            # Compute discriminator output on fake data
+            disc_fake = self.disc(condition, fake).reshape(-1)
+
+            # Compute generator loss
+            loss_gen = self.compute_generator_loss(disc_fake, fake, real, corrected_lr)
+
+            # Backward and optimize generator
+            self.manual_backward(loss_gen)
+            opt_g.step()
+
+            # Log generator loss
+            self.log('generator_loss', loss_gen, on_epoch=True, on_step=True, prog_bar=True, logger=True)
+
+        step_output = {"batch_dict": batch_dict, 'condition': condition}
+        return step_output
+
+
+    def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int):
+        batch_dict, _ = batch
+        x, y = self._generate_condition(batch_dict)
+        x = self._downscale_condition(x)
+        # x, y = batch[self.cond_idx], batch[self.real_idx] # original
+
+
         for i in range(self.val_hparams['val_nens']):
-            noise = torch.randn(y.shape[0], *self.noise_shape[-3:], device=self.device)
-            pred, lr_corrected_pred = self.gen(x, noise)
+            noise = torch.randn(y.shape[0], * self.noise_shape[-3:], device=self.device)
+            pred, lr_corrected_pred = self.gen(x, noise)  # TODO: debug
             pred = pred.detach().to('cpu').numpy().squeeze()
-            preds.append(pred)
-        preds = np.array(preds)
-        truth = y.detach().to('cpu').numpy().squeeze(1)
-        truth = xr.DataArray(
-            truth,
-            dims=['sample', 'lat', 'lon'],
-            name='tp'
-        )
+            batch_dict['precip_output_' + str(i)] = x[i, :, :, :]
 
-        #         print("preds shape", preds.shape)
+        step_output = {"batch_dict": batch_dict, "condition": x}
+        # TODO: calculate and report validation metrics
+        return step_output
 
-        preds = xr.DataArray(
-            preds,
-            dims=['member', 'sample', 'lat', 'lon'],
-            name='tp'
-        )
+        # code below is for ensemble eval
+        # preds = []
+        # for i in range(self.val_hparams['val_nens']):
+        #     noise = torch.randn(y.shape[0], * self.noise_shape[-3:], device=self.device)
+        #     pred, lr_corrected_pred = self.gen(x, noise)  # TODO: debug
+        #     pred = pred.detach().to('cpu').numpy().squeeze()
+        #     preds.append(pred)
 
-        truth = truth * (self.val_hparams['ds_max'] - self.val_hparams['ds_min']) + self.val_hparams['ds_min']
+        # convert to xarray
+        # preds = np.array(preds)
+        # truth = y.detach().to('cpu').numpy().squeeze(1)
+        # truth = xr.DataArray(
+        #     truth,
+        #     dims=['sample', 'lat', 'lon'],
+        #     name='tp')
+        #
+        # preds = xr.DataArray(
+        #     preds,
+        #     dims=['member', 'sample', 'lat', 'lon'],
+        #     name='tp')
 
-        preds = preds * (self.val_hparams['ds_max'] - self.val_hparams['ds_min']) + self.val_hparams['ds_min']
+        # original inverse scaling
+        # truth = truth * (self.val_hparams['ds_max'] - self.val_hparams['ds_min']) + self.val_hparams['ds_min']
+        # preds = preds * (self.val_hparams['ds_max'] - self.val_hparams['ds_min']) + self.val_hparams['ds_min']
 
-        if self.val_hparams['tp_log']:
-            truth = log_retrans(truth, self.val_hparams['tp_log'])
-            preds = log_retrans(preds, self.val_hparams['tp_log'])
+        # if self.val_hparams['tp_log']:
+        #     truth = log_retrans(truth, self.val_hparams['tp_log'])
+        #     preds = log_retrans(preds, self.val_hparams['tp_log'])
 
-        crps = []
-        rmse = []
-        for sample in range(x.shape[0]):
-            sample_crps = xs.crps_ensemble(truth.sel(sample=sample), preds.sel(sample=sample)).values
-            sample_rmse = xs.rmse(preds.sel(sample=sample).mean('member'), truth.sel(sample=sample),
-                                  dim=['lat', 'lon']).values
-            crps.append(sample_crps)
-            rmse.append(sample_rmse)
+        # calculate val metrics
+        # crps = []
+        # rmse = []
+        # for sample in range(x.shape[0]):
+        #     sample_crps = xs.crps_ensemble(truth.sel(sample=sample), preds.sel(sample=sample)).values
+        #     sample_rmse = xs.rmse(preds.sel(sample=sample).mean('member'), truth.sel(sample=sample),
+        #                           dim=['lat', 'lon']).values
+        #     crps.append(sample_crps)
+        #     rmse.append(sample_rmse)
+        #
+        # crps = torch.tensor(np.mean(crps), device=self.device)
+        # rmse = torch.tensor(np.mean(rmse), device=self.device)
+        # self.log('val_crps', crps, on_epoch=True, on_step=False, prog_bar=True, logger=True, sync_dist=True)
+        # self.log('val_rmse', rmse, on_epoch=True, on_step=False, prog_bar=True, logger=True, sync_dist=True)
+        # return crps
 
-        crps = torch.tensor(np.mean(crps), device=self.device)
-        rmse = torch.tensor(np.mean(rmse), device=self.device)
-        self.log('val_crps', crps, on_epoch=True, on_step=False, prog_bar=True, logger=True, sync_dist=True)
-        self.log('val_rmse', rmse, on_epoch=True, on_step=False, prog_bar=True, logger=True, sync_dist=True)
+    def _generate_condition(self, batch_dict: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+        y = self.scaler(batch_dict['precip_gt'])  # .to(config.device))
 
-        return crps
+        if self.model_config.data.condition_mode == 0:
+            raise AttributeError()  # deprecated
+        elif self.model_config.data.condition_mode == 1:
+            condition = batch_dict['precip_up']
+        elif self.model_config.data.condition_mode in [2, 6]:
+            exclude_keys = ['precip_lr', 'precip_gt']
+            tensors_to_stack = [tensor for key, tensor in batch_dict.items() if key not in exclude_keys]
+            stacked_tensor = torch.cat(tensors_to_stack, dim=1)
+            condition = stacked_tensor
+        elif self.model_config.data.condition_mode == 3:
+            exclude_keys = ['precip_lr', 'precip_gt', 'precip_up']
+            tensors_to_stack = [tensor for key, tensor in batch_dict.items() if key not in exclude_keys]
+            stacked_tensor = torch.cat(tensors_to_stack, dim=1)
+            condition = stacked_tensor
+        elif self.model_config.data.condition_mode == 4:
+            condition = batch_dict['precip_masked']
+        elif self.model_config.data.condition_mode == 5:
+            exclude_keys = ['precip_gt', 'mask']
+            tensors_to_stack = [tensor for key, tensor in batch_dict.items() if key not in exclude_keys]
+            stacked_tensor = torch.cat(tensors_to_stack, dim=1)
+            condition = stacked_tensor
+        else:
+            raise AttributeError()
+        return condition, y
+
+    def _downscale_condition(self, condition: torch.Tensor) -> torch.Tensor:
+        """
+        WassDiff dataloder returns upsampled condition that matches the dim out expected output. This function
+        downscales the condition to the reduced size
+        """
+        return F.interpolate(condition, size=(self.noise_shape[-2], self.noise_shape[-1]), mode='bilinear')

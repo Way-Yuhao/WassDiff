@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from pytorch_lightning.core.lightning import LightningModule
+from lightning import LightningModule
 # from torch.nn import functional as F
 import torch.optim as optim
 # import pytorch_lightning as pl
