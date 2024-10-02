@@ -47,5 +47,5 @@ model_config:
     centered: ${data.data_config.centered}
     precip_rescale_c: ${data.data_config.precip_rescale_c}
   sampling:
-    sampling_batch_size: 4 # FIXME: change to 12
+    sampling_batch_size: 12 # FIXME: change to 12
 
