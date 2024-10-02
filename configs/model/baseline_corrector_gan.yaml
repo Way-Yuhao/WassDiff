@@ -8,7 +8,7 @@ discriminator:
   _target_: src.models.baselines.corrector_gan.models.LeinDisc
   _partial_: true
 
-noise_shape: [6, 1, 32, 32]
+noise_shape: [6, 1, 16, 16]
 input_channels: 8
 zero_noise: false
 

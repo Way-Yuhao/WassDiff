@@ -27,7 +27,8 @@ tags: ["dev"]
 #ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-11_12-07-58/checkpoints/epoch_740.ckpt
 #ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-11_12-07-58/checkpoints/last.ckpt
 #ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-15_23-56-41/checkpoints/epoch_802.ckpt
-ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-23_13-17-17/checkpoints/epoch_1172.ckpt
+#ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-23_13-17-17/checkpoints/epoch_1172.ckpt
+ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-30_14-16-02/checkpoints/epoch_499_copy.ckpt
 #ckpt_path: null
 
 model:
@@ -56,7 +57,7 @@ model:
 
 
 #### EVAL SET ########
-name: WassDiff_LiT_trained_det_eval_ckpt_1172
+name: WassDiff_LiT_trained_det_eval_mb_epoch_499
 data:
   dataloader_mode: eval_set_deterministic
   use_test_samples_from: ${paths.data_dir}/rainfall_eval/50_eval_samples_2
