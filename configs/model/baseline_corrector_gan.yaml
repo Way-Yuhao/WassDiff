@@ -46,4 +46,6 @@ model_config:
     condition_size: ${data.data_config.condition_size}
     centered: ${data.data_config.centered}
     precip_rescale_c: ${data.data_config.precip_rescale_c}
+  sampling:
+
 

@@ -16,17 +16,26 @@ from src.utils.metrics import calc_mae, calc_bias
 class PrecipDataLogger(Callback):
     def __init__(self, train_log_img_freq: int = 1000, train_log_score_freq: int = 1000,
                  train_log_param_freq: int = 1000, show_samples_at_start: bool = False,
-                 show_unconditional_samples: bool = False, check_freq_via: str = 'global_step'):
+                 show_unconditional_samples: bool = False, check_freq_via: str = 'global_step',
+                 enable_save_ckpt: bool = False):
+        """
+        Callback to log images, scores and parameters to wandb.
+        :param train_log_img_freq: frequency to log images
+        :param train_log_score_freq: frequency to log scores
+        :param train_log_param_freq: frequency to log parameters
+        :param show_samples_at_start: whether to log samples at the start of training
+        :param show_unconditional_samples: whether to log unconditional samples
+        :param check_freq_via: whether to check frequency via 'global_step' or 'epoch'
+        :param save_ckpt: whether to save checkpoint
+        """
         super().__init__()
-        # self.train_log_img_freq = train_log_img_freq
-        # self.train_log_score_freq = train_log_score_freq
-        # self.train_log_param_freq = train_log_param_freq
+
         self.check_freq_via = check_freq_via
         assert self.check_freq_via in ['global_step', 'epoch']
         self.freqs = {'img': train_log_img_freq, 'score': train_log_score_freq, 'param': train_log_param_freq}
         self.next_log_idx = {'img': 0 if show_samples_at_start else train_log_img_freq, 'score': 0, 'param': 0}
-        # self.show_samples_at_start = show_samples_at_start
         self.show_unconditional_samples = show_unconditional_samples
+        self.enable_save_ckpt = enable_save_ckpt
 
         if self.show_unconditional_samples:
             raise NotImplementedError('Unconditional samples not implemented yet.')
@@ -38,17 +47,6 @@ class PrecipDataLogger(Callback):
         # self.first_samples_logged = False
         self.first_batch_visualized = False
         return
-
-    def _check_frequency(self, trainer: "pl.trainer", key: str):
-        if self.check_freq_via == 'global_step':
-            check_idx = trainer.global_step
-        elif self.check_freq_via == 'epoch':
-            check_idx = trainer.current_epoch
-        if check_idx >= self.next_log_idx[key]:
-            self.next_log_idx[key] = check_idx + self.freqs[key]
-            return True
-        else:
-            return False
 
     @rank_zero_only
     def on_fit_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
@@ -77,6 +75,7 @@ class PrecipDataLogger(Callback):
 
         if self._check_frequency(trainer, 'img'):
             self._log_samples(trainer, pl_module, outputs)
+            self.save_ckpt(trainer)
 
     @rank_zero_only
     def on_train_batch_end(self, trainer: Trainer, pl_module: LightningModule,
@@ -205,6 +204,17 @@ class PrecipDataLogger(Callback):
         wandb.log({"val/conditional_samples_scaled": images})
         return
 
+    def _check_frequency(self, trainer: "pl.trainer", key: str):
+        if self.check_freq_via == 'global_step':
+            check_idx = trainer.global_step
+        elif self.check_freq_via == 'epoch':
+            check_idx = trainer.current_epoch
+        if check_idx >= self.next_log_idx[key]:
+            self.next_log_idx[key] = check_idx + self.freqs[key]
+            return True
+        else:
+            return False
+
     def _modify_pbar_desc(self):
         task_id, original_description = None, None
         # Ensure progress bar is active and tasks are initialized
@@ -228,4 +238,13 @@ class PrecipDataLogger(Callback):
                     # Update the description of the active validation progress bar
                     self.progress_bar.progress.update(task_id, description=original_description)
                     self.progress_bar.progress.refresh()
+        return
+
+
+    def save_ckpt(self, trainer: Trainer):
+        if self.save_ckpt:
+            save_dir = trainer.logger.save_dir
+            ckpt_path = os.path.join(save_dir, 'checkpoints',
+                                     f'epoch_{trainer.current_epoch:03d}_step_{wandb.run.step:03d}.ckpt')
+            trainer.save_checkpoint(ckpt_path)
         return

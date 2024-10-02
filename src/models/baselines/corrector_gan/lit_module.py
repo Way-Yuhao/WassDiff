@@ -216,66 +216,37 @@ class CorrectorGan(LightningModule):
     #         self.log('generator_loss', loss_gen, on_epoch=True, on_step=True, prog_bar=True, logger=True)
     #         return loss_gen
 
-    def training_step(self, batch: Any, batch_idx: int):
-        # Initialize step counter if not already present
-        # if not hasattr(self, 'step_count'):
-        #     self.step_count = 0
-        # self.step_count += 1
+    def training_step(self, batch: Dict[str, torch.Tensor], batch_idx: int):
 
-        # Get optimizers
         opt_g, opt_d = self.optimizers()
-
+        # condition, real = batch[self.cond_idx], batch[self.real_idx]
         batch_dict, _ = batch
         condition, real = self._generate_condition(batch_dict)
         condition = self._downscale_condition(condition)
 
-        # Update discriminator
+        # Update discriminator `disc_freq` times
         for _ in range(self.opt_hparams['disc_freq']):
-            # Zero gradients for discriminator
             opt_d.zero_grad()
-
-            # Generate fake data
             noise = torch.randn(real.shape[0], *self.noise_shape[-3:], device=self.device)
             fake, _ = self.gen(condition, noise)
-
-            # Compute discriminator outputs
+            fake = fake.detach()
             disc_real = self.disc(condition, real).reshape(-1)
             disc_fake = self.disc(condition, fake.detach()).reshape(-1)
-
-            # Compute discriminator loss
             loss_disc = self.compute_discriminator_loss(disc_real, disc_fake, condition, real, fake)
-
-            # Backward and optimize discriminator
             self.manual_backward(loss_disc)
             opt_d.step()
-
-            # Log discriminator loss
             self.log('discriminator_loss', loss_disc, on_epoch=True, on_step=True, prog_bar=True, logger=True)
 
-        # Update generator
+        # Update generator `gen_freq` times
         for _ in range(self.opt_hparams['gen_freq']):
-            # Zero gradients for generator
             opt_g.zero_grad()
-
-            # Generate fake data
             noise = torch.randn(real.shape[0], *self.noise_shape[-3:], device=self.device)
             fake, corrected_lr = self.gen(condition, noise)
-
-            # Compute discriminator output on fake data
             disc_fake = self.disc(condition, fake).reshape(-1)
-
-            # Compute generator loss
             loss_gen = self.compute_generator_loss(disc_fake, fake, real, corrected_lr)
-
-            # Backward and optimize generator
             self.manual_backward(loss_gen)
             opt_g.step()
-
-            # Log generator loss
             self.log('generator_loss', loss_gen, on_epoch=True, on_step=True, prog_bar=True, logger=True)
-
-        step_output = {"batch_dict": batch_dict, 'condition': condition}
-        return step_output
 
 
     def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int):
@@ -367,6 +338,45 @@ class CorrectorGan(LightningModule):
         else:
             raise AttributeError()
         return condition, y
+
+    def compute_discriminator_loss(self, disc_real, disc_fake, condition, real, fake):
+        loss_disc = torch.tensor(0.0).to(self.device)
+
+        if "wasserstein" in self.loss_hparams['disc_loss']:
+            loss_disc += self.loss_hparams['disc_loss']["wasserstein"] * disc_wasserstein(disc_real, disc_fake)
+
+        if "hinge" in self.loss_hparams['disc_loss']:
+            loss_disc += self.loss_hparams['disc_loss']["hinge"] * disc_hinge(disc_real, disc_fake)
+
+        if "gradient_penalty" in self.loss_hparams['disc_loss']:
+            loss_disc += self.loss_hparams['disc_loss']["gradient_penalty"] * gradient_penalty(
+                self.disc, condition, real, fake, self.device)
+
+        return loss_disc
+
+    def compute_generator_loss(self, disc_fake, fake, real, corrected_lr):
+        loss_gen = torch.tensor(0.0).to(self.device)
+
+        if "wasserstein" in self.loss_hparams['gen_loss']:
+            loss_gen += self.loss_hparams['gen_loss']["wasserstein"] * gen_wasserstein(disc_fake)
+
+        if "non_saturating" in self.loss_hparams['gen_loss']:
+            loss_gen += self.loss_hparams['gen_loss']["non_saturating"] * gen_logistic_nonsaturating(disc_fake)
+
+        if "ens_mean_L1_weighted" in self.loss_hparams['gen_loss']:
+            loss_gen += self.loss_hparams['gen_loss']["ens_mean_L1_weighted"] * gen_ens_mean_L1_weighted(fake, real)
+
+        if "lr_corrected_skill" in self.loss_hparams['gen_loss']:
+            loss_gen += self.loss_hparams['gen_loss']["lr_corrected_skill"] * gen_lr_corrected_skill(corrected_lr, real)
+
+        if "lr_corrected_l1" in self.loss_hparams['gen_loss']:
+            loss_gen += self.loss_hparams['gen_loss']["lr_corrected_l1"] * gen_lr_corrected_l1(corrected_lr, real)
+
+        if "ens_mean_lr_corrected_l1" in self.loss_hparams['gen_loss']:
+            loss_gen += self.loss_hparams['gen_loss']["ens_mean_lr_corrected_l1"] * gen_ens_mean_lr_corrected_l1(
+                corrected_lr, real)
+
+        return loss_gen
 
     def _downscale_condition(self, condition: torch.Tensor) -> torch.Tensor:
         """

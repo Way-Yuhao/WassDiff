@@ -10,3 +10,4 @@ log_precip_data:
   train_log_param_freq: 100
   show_samples_at_start: false
   show_unconditional_samples: false
+  enable_save_ckpt: true
