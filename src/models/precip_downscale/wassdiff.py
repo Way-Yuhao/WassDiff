@@ -271,6 +271,19 @@ class WassDiffLitModule(LightningModule):
         return {'batch_dict': batch_dict, 'batch_coords': batch_coords, 'xr_low_res_batch': xr_low_res_batch,
                 'valid_mask': valid_mask}
 
+
+    def sample(self, condition: torch.Tensor) -> torch.Tensor:
+        """
+        Runs sampling fn when given condition tensor. No further trimming or processing is performance.
+        Note that sampling fn is NOT the full Predictor-Corrector Sampler (more accurate).
+        This is only intended to use during validation to gather quick samples.
+        Usage at test time is not recommended.
+        """
+        config = self.model_config
+        sampling_null_condition = self.sampling_null_condition
+        sample, n = self.sampling_fn(self.net, condition=condition, w=config.model.w_guide,
+                                     null_condition=sampling_null_condition)
+        return sample
     def _generate_null_condition(self):
         # generate null condition for sampling
         s = self.model_config.sampling.sampling_batch_size

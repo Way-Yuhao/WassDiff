@@ -20,13 +20,13 @@ class PrecipDataLogger(Callback):
                  enable_save_ckpt: bool = False):
         """
         Callback to log images, scores and parameters to wandb.
-        :param train_log_img_freq: frequency to log images
-        :param train_log_score_freq: frequency to log scores
-        :param train_log_param_freq: frequency to log parameters
-        :param show_samples_at_start: whether to log samples at the start of training
-        :param show_unconditional_samples: whether to log unconditional samples
+        :param train_log_img_freq: frequency to log images. Set to -1 to disable
+        :param train_log_score_freq: frequency to log scores. Set to -1 to disable
+        :param train_log_param_freq: frequency to log parameters. Set to -1 to disable
+        :param show_samples_at_start: whether to log samples at the start of training (likely during sanity check)
+        :param show_unconditional_samples: whether to log unconditional samples. Deprecated.
         :param check_freq_via: whether to check frequency via 'global_step' or 'epoch'
-        :param save_ckpt: whether to save checkpoint
+        :param enable_save_ckpt: whether to save checkpoint
         """
         super().__init__()
 
@@ -123,9 +123,10 @@ class PrecipDataLogger(Callback):
         gt = outputs['batch_dict']['precip_gt']
         config = pl_module.model_config
         s = pl_module.model_config.sampling.sampling_batch_size
-        sampling_null_condition = pl_module.sampling_null_condition
-        sample, n = pl_module.sampling_fn(pl_module.net, condition=condition[0:s],
-                                          w=config.model.w_guide, null_condition=sampling_null_condition)
+
+        # sample, n = pl_module.sampling_fn(pl_module.net, condition=condition[0:s],
+        #                                   w=config.model.w_guide, null_condition=sampling_null_condition)
+        sample = pl_module.sample(condition[0:s])
 
         if config.data.condition_mode == 1:
             # display condition and output in one grid
@@ -149,16 +150,6 @@ class PrecipDataLogger(Callback):
         low_res_display = self.rainfall_dataset.inverse_normalize_precip(low_res_display)
         sample = self.rainfall_dataset.inverse_normalize_precip(sample)
         gt = self.rainfall_dataset.inverse_normalize_precip(gt)
-
-
-        # log unscaled samples
-        # concat_samples = torch.cat(
-        #     (low_res_display[0:s, :, :, :], sample[0:s, :, :, :], gt[0:s, :, :, :]), dim=0)
-        # grid = make_grid(concat_samples, nrow=s)
-        # grid_mono = grid[0, :, :].unsqueeze(0)
-        # cm_grid = cm_(grid_mono.detach().cpu(), vmin=0, vmax=max(low_res_display.max(), gt.max()))
-        # images = wandb.Image(cm_grid, caption='conditional generation [rainfall / output / gt]')
-        # wandb.log({"val/conditional_samples": images}) #, step=pl_module.global_step)
 
         self.log_conditional_samples_scaled(low_res_display, sample, gt, n=s)
 
@@ -205,6 +196,8 @@ class PrecipDataLogger(Callback):
         return
 
     def _check_frequency(self, trainer: "pl.trainer", key: str):
+        if self.freqs[key] == -1:
+            return False
         if self.check_freq_via == 'global_step':
             check_idx = trainer.global_step
         elif self.check_freq_via == 'epoch':

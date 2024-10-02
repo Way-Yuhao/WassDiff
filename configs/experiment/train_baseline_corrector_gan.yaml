@@ -10,7 +10,8 @@ logger:
     name: 'CorrectorGan debug'
 callbacks:
   log_precip_data:
-    train_log_score_freq: 1000000000
+    train_log_score_freq: -1
+    show_samples_at_start: true
 data:
   data_config:
     image_size: 128 # size of high-resolution image
