@@ -145,7 +145,7 @@ class PrecipDataLogger(Callback):
                 low_res_display = batch_dict['precip_up'].detach().clone()
         elif config.data.condition_mode in [4, 5]:
             low_res_display = batch_dict['precip_masked'].detach().clone()
-        low_res_display = low_res_display.to(config.device)
+        low_res_display = low_res_display.to(pl_module.device)
 
         low_res_display = self.rainfall_dataset.inverse_normalize_precip(low_res_display)
         sample = self.rainfall_dataset.inverse_normalize_precip(sample)

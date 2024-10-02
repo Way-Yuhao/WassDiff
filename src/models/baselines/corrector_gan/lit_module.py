@@ -90,134 +90,7 @@ class CorrectorGan(LightningModule):
     def forward(self, condition, noise):
         return self.gen(condition, noise)
 
-    # def training_step(self, batch: Dict[str, torch.Tensor], batch_idx: int):
-    #
-    #     batch_dict, _ = batch
-    #     condition, real = self._generate_condition(batch_dict)
-    #
-    #     # condition, real = batch[self.cond_idx], batch[self.real_idx]
-    #
-    #     # log image
-    #     # if self.global_step % 500 == 0:
-    #     #     self.gen.eval()
-    #     #     noise = torch.randn(real.shape[0], *self.noise_shape[-3:], device=self.device)
-    #     #     #         # log sampled images
-    #     #     sample_imgs, sample_corrected_lrs = self.gen(condition, noise)
-    #     #     sample_imgs = torch.cat([real, sample_imgs], dim=0)
-    #     #     #                 print(sample_imgs.shape)
-    #     #     grid = torchvision.utils.make_grid(sample_imgs)
-    #     #     self.logger.experiment.add_image('generated_images', grid, self.global_step)
-    #     #     sample_corrected_lrs = torch.cat(
-    #     #         [self.upsample_input(F.interpolate(real, scale_factor=0.125, mode='bilinear', align_corners=False)),
-    #     #          self.upsample_input(condition[:, 0:1, :, :]), self.upsample_input(sample_corrected_lrs)], dim=0)
-    #     #     grid = torchvision.utils.make_grid(sample_corrected_lrs)
-    #     #     self.logger.experiment.add_image('corrected_lr_forecasts', grid, self.global_step)
-    #     #
-    #     #     if self.input_channels > 1:
-    #     #         input_forcasts = self.upsample_input(condition)
-    #     #         #                     print(input_forcasts.view(-1, input_forcasts.shape[2], input_forcasts.shape[3]).unsqueeze(1).shape)
-    #     #         grid = torchvision.utils.make_grid(
-    #     #             input_forcasts.view(-1, input_forcasts.shape[2], input_forcasts.shape[3]).unsqueeze(1),
-    #     #             nrow=self.input_channels)
-    #     #     else:
-    #     #         grid = torchvision.utils.make_grid(condition)
-    #     #     self.logger.experiment.add_image('input_images', grid, self.global_step)
-    #     #     self.gen.train()
-    #
-    #     #         # train discriminator
-    #     if optimizer_idx == 0:
-    #         if self.zero_noise:
-    #             noise = torch.zeros(real.shape[0], *self.noise_shape[-3:], device=self.device)
-    #         else:
-    #             noise = torch.randn(real.shape[0], *self.noise_shape[-3:], device=self.device)
-    #         disc_real = self.disc(condition, real).reshape(-1)
-    #         if len(noise.shape) == 5:
-    #             fake = []
-    #             disc_fake = []
-    #             corrected_lr = []
-    #             for i in range(noise.shape[1]):
-    #                 noise_sample = noise[:, i, :, :, :]
-    #                 fake_temp, corrected_lr_temp = self.gen(condition, noise_sample)
-    #                 disc_fake_temp = self.disc(condition, fake_temp).reshape(-1)
-    #                 fake.append(fake_temp)
-    #                 disc_fake.append(disc_fake_temp)
-    #                 corrected_lr.append(corrected_lr_temp)
-    #             fake = torch.stack(fake, dim=0)
-    #             disc_fake = torch.stack(disc_fake, dim=0)
-    #             corrected_lr = torch.stack(corrected_lr, dim=0)
-    #         else:
-    #             fake, corrected_lr = self.gen(condition, noise)
-    #             disc_fake = self.disc(condition, fake).reshape(-1)
-    #
-    #         loss_disc = torch.tensor(0.0).to(self.device)
-    #
-    #         if "wasserstein" in self.loss_hparams['disc_loss']:
-    #             loss_disc += self.loss_hparams['disc_loss']["wasserstein"] * disc_wasserstein(disc_real, disc_fake)
-    #
-    #         if "hinge" in self.loss_hparams['disc_loss']:
-    #             loss_disc += self.loss_hparams['disc_loss']["hinge"] * disc_hinge(disc_real, disc_fake)
-    #
-    #         if "gradient_penalty" in self.loss_hparams['disc_loss']:
-    #             loss_disc += self.loss_hparams['disc_loss']["gradient_penalty"] * gradient_penalty(self.disc, condition,
-    #                                                                                                real, fake,
-    #                                                                                                self.device)
-    #
-    #         self.log('discriminator_loss', loss_disc, on_epoch=True, on_step=True, prog_bar=True, logger=True)
-    #         return loss_disc
-    #
-    #     #         #train generator
-    #     elif optimizer_idx == 1:
-    #         #             print(self.gen.training)
-    #         if self.zero_noise:
-    #             noise = torch.zeros(real.shape[0], *self.noise_shape, device=self.device)
-    #         else:
-    #             noise = torch.randn(real.shape[0], *self.noise_shape, device=self.device)
-    #         if len(noise.shape) == 5:
-    #             fake = []
-    #             disc_fake = []
-    #             corrected_lr = []
-    #             for i in range(noise.shape[1]):
-    #                 noise_sample = noise[:, i, :, :, :]
-    #                 fake_temp, corrected_lr_temp = self.gen(condition, noise_sample)
-    #                 disc_fake_temp = self.disc(condition, fake_temp).reshape(-1)
-    #                 fake.append(fake_temp)
-    #                 disc_fake.append(disc_fake_temp)
-    #                 corrected_lr.append(corrected_lr_temp)
-    #             fake = torch.stack(fake, dim=0)
-    #             disc_fake = torch.stack(disc_fake, dim=0)
-    #             corrected_lr = torch.stack(corrected_lr, dim=0)
-    #
-    #         else:
-    #             fake, corrected_lr = self.gen(condition, noise)
-    #             disc_fake = self.disc(condition, fake).reshape(-1)
-    #
-    #         loss_gen = torch.tensor(0.0).to(self.device)
-    #
-    #         if "wasserstein" in self.loss_hparams['gen_loss']:
-    #             loss_gen += self.loss_hparams['gen_loss']["wasserstein"] * gen_wasserstein(disc_fake)
-    #
-    #         if "non_saturating" in self.loss_hparams['gen_loss']:
-    #             loss_gen += self.loss_hparams['gen_loss']["non_saturating"] * gen_logistic_nonsaturating(disc_fake)
-    #
-    #         if "ens_mean_L1_weighted" in self.loss_hparams['gen_loss']:
-    #             loss_gen += self.loss_hparams['gen_loss']["ens_mean_L1_weighted"] * gen_ens_mean_L1_weighted(fake, real)
-    #
-    #         if "lr_corrected_skill" in self.loss_hparams['gen_loss']:
-    #             loss_gen += self.loss_hparams['gen_loss']["lr_corrected_skill"] * gen_lr_corrected_skill(corrected_lr,
-    #                                                                                                      real)
-    #
-    #         if "lr_corrected_l1" in self.loss_hparams['gen_loss']:
-    #             loss_gen += self.loss_hparams['gen_loss']["lr_corrected_l1"] * gen_lr_corrected_l1(corrected_lr, real)
-    #
-    #         if "ens_mean_lr_corrected_l1" in self.loss_hparams['gen_loss']:
-    #             loss_gen += self.loss_hparams['gen_loss']["ens_mean_lr_corrected_l1"] * gen_ens_mean_lr_corrected_l1(
-    #                 corrected_lr, real)
-    #
-    #         self.log('generator_loss', loss_gen, on_epoch=True, on_step=True, prog_bar=True, logger=True)
-    #         return loss_gen
-
     def training_step(self, batch: Dict[str, torch.Tensor], batch_idx: int):
-
         opt_g, opt_d = self.optimizers()
         # condition, real = batch[self.cond_idx], batch[self.real_idx]
         batch_dict, _ = batch
@@ -310,6 +183,12 @@ class CorrectorGan(LightningModule):
         # self.log('val_crps', crps, on_epoch=True, on_step=False, prog_bar=True, logger=True, sync_dist=True)
         # self.log('val_rmse', rmse, on_epoch=True, on_step=False, prog_bar=True, logger=True, sync_dist=True)
         # return crps
+
+    def sample(self, condition: torch.Tensor):
+        noise = torch.randn(condition.shape[0], *self.noise_shape[-3:], device=self.device)
+        fake, _ = self.gen(condition, noise)
+        return fake
+
 
     def _generate_condition(self, batch_dict: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         y = self.scaler(batch_dict['precip_gt'])  # .to(config.device))
