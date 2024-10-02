@@ -1,22 +1,21 @@
 from typing import Any, Dict, Tuple, Optional
 import numpy as np
 import torch
+from lightning.pytorch.utilities.types import STEP_OUTPUT
 from torch import nn
 from lightning import LightningModule
 import torch.optim as optim
-import torchvision
+# import torchvision
 import matplotlib.pyplot as plt
-import xarray as xr
-import xskillscore as xs
-from dask.diagnostics import ProgressBar
-from sklearn.metrics import f1_score
+# import xarray as xr
+# import xskillscore as xs
 
-from src.utils.corrector_gan_utils.utils import tqdm, device
+# from src.utils.corrector_gan_utils.utils import tqdm, device
 from src.models.baselines.corrector_gan.layers import *
-from src.utils.corrector_gan_utils.dataloader import log_retrans
+# from src.utils.corrector_gan_utils.dataloader import log_retrans
 from src.utils.corrector_gan_utils.loss import *
 from src.utils.ncsn_utils import datasets as datasets
-
+from src.utils.metrics import calc_mae, calc_bias, calc_crps
 
 class CorrectorGan(LightningModule):
     def __init__(self, generator, discriminator, noise_shape, input_channels=1,
@@ -126,63 +125,46 @@ class CorrectorGan(LightningModule):
         batch_dict, _ = batch
         x, y = self._generate_condition(batch_dict)
         x = self._downscale_condition(x)
-        # x, y = batch[self.cond_idx], batch[self.real_idx] # original
-
 
         for i in range(self.val_hparams['val_nens']):
             noise = torch.randn(y.shape[0], * self.noise_shape[-3:], device=self.device)
             pred, lr_corrected_pred = self.gen(x, noise)  # TODO: debug
             pred = pred.detach().to('cpu').numpy().squeeze()
-            batch_dict['precip_output_' + str(i)] = x[i, :, :, :]
+            batch_dict['precip_output_' + str(i)] = pred
 
         step_output = {"batch_dict": batch_dict, "condition": x}
         # TODO: calculate and report validation metrics
         return step_output
 
-        # code below is for ensemble eval
-        # preds = []
-        # for i in range(self.val_hparams['val_nens']):
-        #     noise = torch.randn(y.shape[0], * self.noise_shape[-3:], device=self.device)
-        #     pred, lr_corrected_pred = self.gen(x, noise)  # TODO: debug
-        #     pred = pred.detach().to('cpu').numpy().squeeze()
-        #     preds.append(pred)
-
-        # convert to xarray
-        # preds = np.array(preds)
-        # truth = y.detach().to('cpu').numpy().squeeze(1)
-        # truth = xr.DataArray(
-        #     truth,
-        #     dims=['sample', 'lat', 'lon'],
-        #     name='tp')
-        #
-        # preds = xr.DataArray(
-        #     preds,
-        #     dims=['member', 'sample', 'lat', 'lon'],
-        #     name='tp')
-
-        # original inverse scaling
-        # truth = truth * (self.val_hparams['ds_max'] - self.val_hparams['ds_min']) + self.val_hparams['ds_min']
-        # preds = preds * (self.val_hparams['ds_max'] - self.val_hparams['ds_min']) + self.val_hparams['ds_min']
-
-        # if self.val_hparams['tp_log']:
-        #     truth = log_retrans(truth, self.val_hparams['tp_log'])
-        #     preds = log_retrans(preds, self.val_hparams['tp_log'])
-
-        # calculate val metrics
-        # crps = []
-        # rmse = []
-        # for sample in range(x.shape[0]):
-        #     sample_crps = xs.crps_ensemble(truth.sel(sample=sample), preds.sel(sample=sample)).values
-        #     sample_rmse = xs.rmse(preds.sel(sample=sample).mean('member'), truth.sel(sample=sample),
-        #                           dim=['lat', 'lon']).values
-        #     crps.append(sample_crps)
-        #     rmse.append(sample_rmse)
-        #
-        # crps = torch.tensor(np.mean(crps), device=self.device)
-        # rmse = torch.tensor(np.mean(rmse), device=self.device)
-        # self.log('val_crps', crps, on_epoch=True, on_step=False, prog_bar=True, logger=True, sync_dist=True)
-        # self.log('val_rmse', rmse, on_epoch=True, on_step=False, prog_bar=True, logger=True, sync_dist=True)
-        # return crps
+    def on_validation_batch_end(self, outputs: STEP_OUTPUT, batch: Any, batch_idx: int,
+                                dataloader_idx: int = 0) -> None:
+        batch_size = outputs['batch_dict']['precip_gt'].shape[0]
+        for i in range(batch_size):
+            precip_output, precip_gt = None, None
+            for key, item in outputs['batch_dict'].items():
+                if 'precip_output' in key:
+                    # cur_precip = item[i, 0, :, :].cpu().detach().numpy()
+                    # cur_precip = item.cpu().detach().numpy()
+                    cure_precip = item[i, :, :]
+                    cur_precip = np.expand_dims(cure_precip, axis=0)
+                    if precip_output is None:
+                        precip_output = cur_precip
+                    else:
+                        precip_output = np.concatenate([precip_output, cur_precip], axis=0)
+                elif key == 'precip_gt':
+                    if precip_gt is None:
+                        precip_gt = item[i, 0, :, :].cpu().detach().numpy()
+                    else:
+                        # check if the gt is the same for all runs
+                        assert np.allclose(precip_gt, item[i, 0, :, :].cpu().detach().numpy())
+            precip_output_avg = np.mean(precip_output, axis=0)
+            mae = calc_mae(precip_output_avg, precip_gt, valid_mask=None, k=1, pooling_func='mean')
+            bias = calc_bias(precip_output_avg, precip_gt, valid_mask=None, k=1, pooling_func='mean')
+            crps = calc_crps(precip_output, precip_gt)
+            self.log('val/mae', mae, on_epoch=True, on_step=False, prog_bar=False, logger=True)
+            self.log('val/bias', bias, on_epoch=True, on_step=False, prog_bar=False, logger=True)
+            self.log('val/crps', crps, on_epoch=True, on_step=False, prog_bar=False, logger=True)
+        return
 
     def sample(self, condition: torch.Tensor):
         noise = torch.randn(condition.shape[0], *self.noise_shape[-3:], device=self.device)

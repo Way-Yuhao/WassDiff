@@ -70,18 +70,17 @@ class PrecipDataLogger(Callback):
         return
 
     @rank_zero_only
+    def on_train_batch_end(self, trainer: Trainer, pl_module: LightningModule, outputs: Any,
+                           batch: Any, batch_idx: int) -> None:
+        if self._check_frequency(trainer, 'score'):
+            self._log_score(pl_module, outputs)
+
+    @rank_zero_only
     def on_validation_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
                                 batch: Any, batch_idx: int, dataloader_idx: int = 0) -> None:
-
         if self._check_frequency(trainer, 'img'):
             self._log_samples(trainer, pl_module, outputs)
             self.save_ckpt(trainer)
-
-    @rank_zero_only
-    def on_train_batch_end(self, trainer: Trainer, pl_module: LightningModule,
-                           outputs: Any, batch: Any, batch_idx: int) -> None:
-        if self._check_frequency(trainer, 'score'):
-            self._log_score(pl_module, outputs)
 
     @staticmethod
     def _log_score(pl_module: LightningModule, outputs: Dict[str, torch.Tensor]):
