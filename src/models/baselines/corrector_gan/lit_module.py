@@ -49,6 +49,9 @@ class CorrectorGan(LightningModule):
         self.automatic_optimization = automatic_optimization
         self.model_config = model_config
 
+        # to be defined elsewhere
+        self.rainfall_dataset = None
+
         self.save_hyperparameters()
 
     def configure_optimizers(self):
@@ -79,6 +82,9 @@ class CorrectorGan(LightningModule):
         # return [{"optimizer": disc_opt, "frequency": self.opt_hparams['disc_freq']},
         #         {"optimizer": gen_opt, "frequency": self.opt_hparams['gen_freq']}]
         return [disc_opt, gen_opt]
+
+    def on_validation_start(self) -> None:
+        self.rainfall_dataset = self.trainer.datamodule.precip_dataset
 
     def add_sn(self, m):
         if isinstance(m, (nn.Conv2d, nn.Linear, nn.ConvTranspose2d)):
@@ -130,7 +136,7 @@ class CorrectorGan(LightningModule):
             noise = torch.randn(y.shape[0], * self.noise_shape[-3:], device=self.device)
             pred, lr_corrected_pred = self.gen(x, noise)  # TODO: debug
             pred = pred.detach().to('cpu').numpy().squeeze()
-            batch_dict['precip_output_' + str(i)] = pred
+            batch_dict['precip_output_' + str(i)] = torch.from_numpy(pred).unsqueeze(1)
 
         step_output = {"batch_dict": batch_dict, "condition": x}
         # TODO: calculate and report validation metrics
@@ -138,15 +144,15 @@ class CorrectorGan(LightningModule):
 
     def on_validation_batch_end(self, outputs: STEP_OUTPUT, batch: Any, batch_idx: int,
                                 dataloader_idx: int = 0) -> None:
-        batch_size = outputs['batch_dict']['precip_gt'].shape[0]
+        batch_dict = self.rainfall_dataset.inverse_normalize_batch(outputs['batch_dict'])
+        batch_size = batch_dict['precip_gt'].shape[0]
+
         for i in range(batch_size):
             precip_output, precip_gt = None, None
             for key, item in outputs['batch_dict'].items():
                 if 'precip_output' in key:
-                    # cur_precip = item[i, 0, :, :].cpu().detach().numpy()
-                    # cur_precip = item.cpu().detach().numpy()
-                    cure_precip = item[i, :, :]
-                    cur_precip = np.expand_dims(cure_precip, axis=0)
+                    cur_precip = item[i, 0, :, :].cpu().detach().numpy()
+                    cur_precip = np.expand_dims(cur_precip, axis=0)
                     if precip_output is None:
                         precip_output = cur_precip
                     else:
