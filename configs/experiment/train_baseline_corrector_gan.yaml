@@ -12,6 +12,10 @@ callbacks:
   log_precip_data:
     train_log_score_freq: -1
     show_samples_at_start: true
+  stop_if_nan:
+    monitor: ['discriminator_loss', 'generator_loss']
+    every_n_train_steps: 100
+    model_save_every_n_train_steps: 10000
 data:
   ######## det eval ########
 #  use_val_samples_from: ${paths.data_dir}/rainfall_eval/val_det_samples_256

@@ -47,7 +47,7 @@ class WassDiffLitModule(LightningModule):
         self.train_step_fn = None
         self.eval_step_fn = None
         self.sampling_fn = None  # sampling function used during training (for displaying conditional samples)
-        self.pc_upsampler = None  # sampling function used during inference
+        self.pc_upsampler = None  # sampling function used during inference (Predictor-Corrector upsampler)
 
         # internal flags
         self.automatic_optimization = False

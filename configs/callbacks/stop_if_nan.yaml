@@ -1,0 +1,4 @@
+_target_: src.callbacks.stop_if_nan.StopIfNan
+monitor: ['loss']
+every_n_train_steps: 1
+model_save_every_n_train_steps: 10000

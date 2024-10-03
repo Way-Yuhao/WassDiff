@@ -223,26 +223,19 @@ class CorrectorGan(LightningModule):
 
     def compute_generator_loss(self, disc_fake, fake, real, corrected_lr):
         loss_gen = torch.tensor(0.0).to(self.device)
-
         if "wasserstein" in self.loss_hparams['gen_loss']:
             loss_gen += self.loss_hparams['gen_loss']["wasserstein"] * gen_wasserstein(disc_fake)
-
         if "non_saturating" in self.loss_hparams['gen_loss']:
             loss_gen += self.loss_hparams['gen_loss']["non_saturating"] * gen_logistic_nonsaturating(disc_fake)
-
         if "ens_mean_L1_weighted" in self.loss_hparams['gen_loss']:
             loss_gen += self.loss_hparams['gen_loss']["ens_mean_L1_weighted"] * gen_ens_mean_L1_weighted(fake, real)
-
         if "lr_corrected_skill" in self.loss_hparams['gen_loss']:
             loss_gen += self.loss_hparams['gen_loss']["lr_corrected_skill"] * gen_lr_corrected_skill(corrected_lr, real)
-
         if "lr_corrected_l1" in self.loss_hparams['gen_loss']:
             loss_gen += self.loss_hparams['gen_loss']["lr_corrected_l1"] * gen_lr_corrected_l1(corrected_lr, real)
-
         if "ens_mean_lr_corrected_l1" in self.loss_hparams['gen_loss']:
             loss_gen += self.loss_hparams['gen_loss']["ens_mean_lr_corrected_l1"] * gen_ens_mean_lr_corrected_l1(
                 corrected_lr, real)
-
         return loss_gen
 
     def _downscale_condition(self, condition: torch.Tensor) -> torch.Tensor:
@@ -251,3 +244,4 @@ class CorrectorGan(LightningModule):
         downscales the condition to the reduced size
         """
         return F.interpolate(condition, size=(self.noise_shape[-2], self.noise_shape[-1]), mode='bilinear')
+
