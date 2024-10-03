@@ -43,8 +43,8 @@ class SlackAlert(Callback):
         message = f'*{title}*```{stack_trace}```\nHost: {self.hostname}\nDevice: {device}\nTime: {now}'
         # Send the alert using your alert function
         if isinstance(exception, KeyboardInterrupt) and self.ignore_keyboard_interrupt:
-                yprint('SlackAlert: Encountered keyboard interrupt. Slack alert not sent.')
-                print('To enable slack alerts on keyboard interrupts, set `ignore_keyboard_interrupt` to False.')
+                print('SlackAlert: Encountered keyboard interrupt. Slack alert not sent.\n'
+                      'To enable slack alerts on keyboard interrupts, set `ignore_keyboard_interrupt` to False.')
                 raise exception
         alert(message)
         self.exception_occurred = True
