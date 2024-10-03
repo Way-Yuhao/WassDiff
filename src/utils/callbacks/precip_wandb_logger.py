@@ -241,8 +241,7 @@ class PrecipDataLogger(Callback):
             ckpt_path = os.path.join(save_dir, 'checkpoints',
                                      f'epoch_{trainer.current_epoch:03d}_step_{wandb.run.step:03d}.ckpt')
             trainer.save_checkpoint(ckpt_path)
-            if self.add_reference_artifact:
-                # Log the checkpoint as a reference artifact
+            if self.add_reference_artifact: # Log the checkpoint as a reference artifact
                 artifact = wandb.Artifact(name=f'model-ckpt-{wandb.run.id}', type='model')
                 artifact.add_reference(f"file://{ckpt_path}")
                 artifact.metadata = {'epoch': trainer.current_epoch, 'step': wandb.run.step}
