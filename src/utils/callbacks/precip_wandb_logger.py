@@ -240,3 +240,12 @@ class PrecipDataLogger(Callback):
                                      f'epoch_{trainer.current_epoch:03d}_step_{wandb.run.step:03d}.ckpt')
             trainer.save_checkpoint(ckpt_path)
         return
+
+    @staticmethod
+    def remove_image_file_from_summary():
+        # FIXME: this is not working...
+        for key in list(wandb.run.summary.keys()):
+            value = wandb.run.summary[key]
+            if isinstance(value, dict) and value.get('_type') == 'image-file':
+                del wandb.run.summary[key]
+        return
