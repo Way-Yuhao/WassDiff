@@ -33,7 +33,7 @@ class PrecipDataLogger(Callback):
         self.check_freq_via = check_freq_via
         assert self.check_freq_via in ['global_step', 'epoch']
         self.freqs = {'img': train_log_img_freq, 'score': train_log_score_freq, 'param': train_log_param_freq}
-        self.next_log_idx = {'img': 0 if show_samples_at_start else train_log_img_freq, 'score': 0, 'param': 0}
+        self.next_log_idx = {'img': 0 if show_samples_at_start else train_log_img_freq - 1, 'score': 0, 'param': 0}
         self.show_unconditional_samples = show_unconditional_samples
         self.enable_save_ckpt = enable_save_ckpt
 
