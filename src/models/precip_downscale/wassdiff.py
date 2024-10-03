@@ -17,6 +17,7 @@ import src.utils.ncsn_utils.controllable_generation as controllable_generation
 from src.utils.ncsn_utils.utils import restore_checkpoint
 from src.utils.ncsn_utils.losses import get_optimizer
 from src.utils.helper import yprint
+from src.utils.image_spliter import ImageSpliterTh
 
 
 class WassDiffLitModule(LightningModule):
@@ -25,6 +26,7 @@ class WassDiffLitModule(LightningModule):
 
     def __init__(self, model_config: dict, optimizer_config: dict,
                  compile: bool, num_samples: int = 1, pytorch_ckpt_path: Optional[str] = None,
+                 tiled_diffusion: bool = False,
                  *args, **kwargs) -> None:
         """Initialize a `WassDiffLitModule`.
 
@@ -40,6 +42,7 @@ class WassDiffLitModule(LightningModule):
         self.save_hyperparameters(logger=False, ignore=("model_config", "optimizer_config"))
         self.model_config = model_config
         self.optimizer_config = optimizer_config
+        self.tiled_diffusion = tiled_diffusion
 
         # TODO defined loss function and metrics
 
@@ -131,8 +134,6 @@ class WassDiffLitModule(LightningModule):
         # Building sampling functions
         sampling_shape = (self.model_config.sampling.sampling_batch_size, self.model_config.data.num_channels,
                           self.model_config.data.image_size, self.model_config.data.image_size)
-        self.sampling_fn = sampling.get_sampling_fn(self.model_config, sde, sampling_shape, self.inverse_scaler,
-                                                    sampling_eps)
         # s = self.model_config.sampling.sampling_batch_size
         # num_train_steps = self.model_config.training.n_iters
 
@@ -259,6 +260,46 @@ class WassDiffLitModule(LightningModule):
         if self.hparams.bypass_sampling:
             batch_dict['precip_output'] = torch.zeros_like(gt)
         else:
+            if self.tiled_diffusion:
+                if self.tiled_diffusion:
+                    # Implement tiled diffusion using ImageSpliterTh
+                    # Parameters for splitting
+                    pch_size = self.model_config.data.patch_size  # Define in your config
+                    stride = self.model_config.data.stride  # Define in your config
+                    sf = 1  # Scale factor, adjust if necessary
+
+                    # Initialize the ImageSpliterTh
+                    image_spliter = ImageSpliterTh(condition, pch_size, stride, sf=sf)
+
+                    # Process each patch
+                    for pch_condition, (h_start, h_end, w_start, w_end) in image_spliter:
+                        # Apply the scaler to the patch
+                        pch_condition_scaled = self.scaler(pch_condition)
+
+                        # Generate the null condition for the patch
+                        pch_null_condition = torch.ones_like(pch_condition) * self.model_config.model.null_token
+
+                        # Process the patch using the model
+                        pch_output = self.pc_upsampler(
+                            self.net,
+                            pch_condition_scaled,
+                            w=self.model_config.model.w_guide,
+                            out_dim=(pch_condition.shape[0], 1, pch_condition.shape[2], pch_condition.shape[3]),
+                            save_dir=None,
+                            null_condition=pch_null_condition,
+                            gt=None,  # Optionally provide gt if needed
+                            display_pbar=self.hparams.display_sampling_pbar
+                        )
+
+                        # Place the processed patch back into the result image
+                        image_spliter.im_res[:, :, h_start:h_end, w_start:w_end] += pch_output * image_spliter.weight
+                        image_spliter.pixel_count[:, :, h_start:h_end, w_start:w_end] += image_spliter.weight
+
+                    # Normalize the result by the pixel counts to handle overlaps
+                    x = image_spliter.im_res / image_spliter.pixel_count
+                    batch_dict['precip_output'] = x
+            else:
+    # TODO: execute as normal
             x = self.pc_upsampler(self.net, self.scaler(condition), w=self.model_config.model.w_guide,
                                   out_dim=(batch_size, 1, self.model_config.data.image_size, self.model_config.data.image_size),
                                   save_dir=None, null_condition=null_condition, gt=gt,
