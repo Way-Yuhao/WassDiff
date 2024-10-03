@@ -7,7 +7,7 @@ defaults:
 logger:
   wandb:
     project: "WassDiff-Baselines"
-    name: 'CorrectorGan debug'
+    name: 'CorrectorGan reproduce'
 callbacks:
   log_precip_data:
     train_log_score_freq: -1

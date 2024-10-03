@@ -18,7 +18,7 @@ opt_hparams:
   disc_lr: 5e-5
   gen_lr: 5e-5
   gen_freq: 1
-  disc_freq: 5
+  disc_freq: 2
   b1: 0.0
   b2: 0.9
 
