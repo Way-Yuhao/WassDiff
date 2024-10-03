@@ -113,7 +113,8 @@ class CorrectorGan(LightningModule):
             loss_disc = self.compute_discriminator_loss(disc_real, disc_fake, condition, real, fake)
             self.manual_backward(loss_disc)
             opt_d.step()
-            self.log('discriminator_loss', loss_disc, on_epoch=True, on_step=False, prog_bar=True, logger=True)
+            self.log('discriminator_loss', loss_disc, batch_size=real.shape[0],
+                     on_epoch=True, on_step=False, prog_bar=True, logger=True)
 
         # Update generator `gen_freq` times
         for _ in range(self.opt_hparams['gen_freq']):
@@ -124,7 +125,8 @@ class CorrectorGan(LightningModule):
             loss_gen = self.compute_generator_loss(disc_fake, fake, real, corrected_lr)
             self.manual_backward(loss_gen)
             opt_g.step()
-            self.log('generator_loss', loss_gen, on_epoch=True, on_step=False, prog_bar=True, logger=True)
+            self.log('generator_loss', loss_gen, batch_size=real.shape[0],
+                     on_epoch=True, on_step=False, prog_bar=True, logger=True)
 
 
     def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int):
