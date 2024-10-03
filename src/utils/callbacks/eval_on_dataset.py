@@ -117,6 +117,15 @@ class EvalOnDataset(Callback):
                 summary_stats, _ = self.compute_metrics(pl_module, save_to_disk=False)
                 self.report_via_slack(trainer, title=f'Preliminary test results with {batch_idx + 1} batches',
                                       content=df_to_markdown_table(summary_stats))
+        if self.show_vis:
+            print('Visualizing...')
+            batch_size = batch_dict['precip_gt'].shape[0]
+            for i in range(batch_size):
+                cpc_inter = inverse_norm_batch_dict['precip_up'][i][0, :, :]
+                output = inverse_norm_batch_dict['precip_output'][i][0, :, :]
+                gt = inverse_norm_batch_dict['precip_gt'][i][0, :, :]
+                f = f'batch_{batch_idx}.pt'
+                vis_sample(cpc_inter, output, gt, self.vis_dir, f, i)
         return
 
     @rank_zero_only
@@ -176,10 +185,8 @@ class EvalOnDataset(Callback):
                 if not filter_sample_logic(valid_mask, logic='remove_any_invalid'):
                     continue
                 # TODO: add noise to gt? that would affect pcc and ssim
-
-                if self.show_vis:
-                    vis_sample(cpc_inter, output, gt, self.vis_dir, f, i)
-
+                # if self.show_vis:
+                #     vis_sample(cpc_inter, output, gt, self.vis_dir, f, i)
                 k = 1
                 pooling_func = 'mean'
 

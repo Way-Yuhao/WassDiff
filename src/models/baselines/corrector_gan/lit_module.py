@@ -25,7 +25,8 @@ class CorrectorGan(LightningModule):
                               'gen_freq': 1, 'disc_freq': 5, 'b1': 0.0, 'b2': 0.9},
                  loss_hparams={'disc_loss': "wasserstein", 'gen_loss': "wasserstein", 'lambda_gp': 10},
                  val_hparams={'val_nens': 10, 'tp_log': 0.01, 'ds_max': 50, 'ds_min': 0},
-                 model_config: Dict = {}, automatic_optimization: bool = False):  # fill in
+                 model_config: Dict = {}, automatic_optimization: bool = False,
+                 use_gradient_clipping: bool = False):  # fill in
         super().__init__()
 
         self.noise_shape = noise_shape
@@ -39,6 +40,7 @@ class CorrectorGan(LightningModule):
         self.val_hparams = val_hparams
         self.upsample_input = nn.Upsample(scale_factor=8)
         self.zero_noise = zero_noise
+        self.use_gradient_clipping = use_gradient_clipping
 
         if disc_spectral_norm:
             self.disc.apply(self.add_sn)
@@ -112,9 +114,17 @@ class CorrectorGan(LightningModule):
             disc_fake = self.disc(condition, fake.detach()).reshape(-1)
             loss_disc = self.compute_discriminator_loss(disc_real, disc_fake, condition, real, fake)
             self.manual_backward(loss_disc)
+
+            if self.use_gradient_clipping:
+                torch.nn.utils.clip_grad_norm_(self.disc.parameters(), 1.0)
+
             opt_d.step()
-            self.log('discriminator_loss', loss_disc, batch_size=real.shape[0],
+            self.log('train/D_loss', loss_disc, batch_size=real.shape[0],
                      on_epoch=True, on_step=False, prog_bar=True, logger=True)
+            self.log('train/D_real', torch.mean(disc_real), batch_size=real.shape[0],
+                        on_epoch=True, on_step=False, prog_bar=True, logger=True)
+            self.log('train/D_fake', torch.mean(disc_fake), batch_size=real.shape[0],
+                        on_epoch=True, on_step=False, prog_bar=True, logger=True)
 
         # Update generator `gen_freq` times
         for _ in range(self.opt_hparams['gen_freq']):
@@ -124,8 +134,12 @@ class CorrectorGan(LightningModule):
             disc_fake = self.disc(condition, fake).reshape(-1)
             loss_gen = self.compute_generator_loss(disc_fake, fake, real, corrected_lr)
             self.manual_backward(loss_gen)
+
+            if self.use_gradient_clipping:
+                torch.nn.utils.clip_grad_norm_(self.gen.parameters(), 1.0)
+
             opt_g.step()
-            self.log('generator_loss', loss_gen, batch_size=real.shape[0],
+            self.log('train/G_loss', loss_gen, batch_size=real.shape[0],
                      on_epoch=True, on_step=False, prog_bar=True, logger=True)
 
 
@@ -236,13 +250,14 @@ class CorrectorGan(LightningModule):
         if "lr_corrected_l1" in self.loss_hparams['gen_loss']:
             loss_gen += self.loss_hparams['gen_loss']["lr_corrected_l1"] * gen_lr_corrected_l1(corrected_lr, real)
         if "ens_mean_lr_corrected_l1" in self.loss_hparams['gen_loss']:
+            # This line below throws a broadcasting warning; believed to be irrelevant -- Yuhao
             loss_gen += self.loss_hparams['gen_loss']["ens_mean_lr_corrected_l1"] * gen_ens_mean_lr_corrected_l1(
                 corrected_lr, real)
         return loss_gen
 
     def _downscale_condition(self, condition: torch.Tensor) -> torch.Tensor:
         """
-        WassDiff dataloder returns upsampled condition that matches the dim out expected output. This function
+        WassDiff dataloader returns upsampled condition that matches the dim out expected output. This function
         downscales the condition to the reduced size
         """
         return F.interpolate(condition, size=(self.noise_shape[-2], self.noise_shape[-1]), mode='bilinear')
