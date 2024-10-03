@@ -11,3 +11,4 @@ log_precip_data:
   show_samples_at_start: false
   show_unconditional_samples: false
   enable_save_ckpt: true
+  add_reference_artifact: true

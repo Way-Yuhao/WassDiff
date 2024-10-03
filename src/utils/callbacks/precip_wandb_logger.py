@@ -17,7 +17,7 @@ class PrecipDataLogger(Callback):
     def __init__(self, train_log_img_freq: int = 1000, train_log_score_freq: int = 1000,
                  train_log_param_freq: int = 1000, show_samples_at_start: bool = False,
                  show_unconditional_samples: bool = False, check_freq_via: str = 'global_step',
-                 enable_save_ckpt: bool = False):
+                 enable_save_ckpt: bool = False, add_reference_artifact: bool = False):
         """
         Callback to log images, scores and parameters to wandb.
         :param train_log_img_freq: frequency to log images. Set to -1 to disable
@@ -27,6 +27,7 @@ class PrecipDataLogger(Callback):
         :param show_unconditional_samples: whether to log unconditional samples. Deprecated.
         :param check_freq_via: whether to check frequency via 'global_step' or 'epoch'
         :param enable_save_ckpt: whether to save checkpoint
+        :param add_reference_artifact: whether to add the checkpoint as a reference artifact
         """
         super().__init__()
 
@@ -36,6 +37,7 @@ class PrecipDataLogger(Callback):
         self.next_log_idx = {'img': 0 if show_samples_at_start else train_log_img_freq - 1, 'score': 0, 'param': 0}
         self.show_unconditional_samples = show_unconditional_samples
         self.enable_save_ckpt = enable_save_ckpt
+        self.add_reference_artifact = add_reference_artifact
 
         if self.show_unconditional_samples:
             raise NotImplementedError('Unconditional samples not implemented yet.')
@@ -79,7 +81,7 @@ class PrecipDataLogger(Callback):
     def on_validation_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
                                 batch: Any, batch_idx: int, dataloader_idx: int = 0) -> None:
         if self._check_frequency(trainer, 'img'):
-            self._log_samples(trainer, pl_module, outputs)
+            # self._log_samples(trainer, pl_module, outputs)  # TODO: enable this
             self.save_ckpt(trainer)
 
     @staticmethod
@@ -234,11 +236,18 @@ class PrecipDataLogger(Callback):
 
 
     def save_ckpt(self, trainer: Trainer):
-        if self.save_ckpt:
+        if self.enable_save_ckpt:
             save_dir = trainer.logger.save_dir
             ckpt_path = os.path.join(save_dir, 'checkpoints',
                                      f'epoch_{trainer.current_epoch:03d}_step_{wandb.run.step:03d}.ckpt')
             trainer.save_checkpoint(ckpt_path)
+            if self.add_reference_artifact:
+                # Log the checkpoint as a reference artifact
+                artifact = wandb.Artifact(name=f'model-ckpt-{wandb.run.id}', type='model')
+                artifact.add_reference(f"file://{ckpt_path}")
+                artifact.metadata = {'epoch': trainer.current_epoch, 'step': wandb.run.step}
+                wandb.run.log_artifact(artifact, aliases=[f'epoch_{trainer.current_epoch:03d}',
+                                                          f'step_{wandb.run.step:03d}'])
         return
 
     @staticmethod
