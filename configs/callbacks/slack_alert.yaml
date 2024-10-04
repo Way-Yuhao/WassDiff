@@ -2,3 +2,5 @@ slack_alert:
   _target_: src.utils.callbacks.slack_alert.SlackAlert
   disabled: false
   ignore_keyboard_interrupt: true
+  at_epoch: 2
+  at_global_step: 10

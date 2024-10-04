@@ -34,7 +34,7 @@ ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-10-02_13-40-41/checkpoints/
 
 model:
   num_samples: 1
-  compile: false
+  compile: true  # for speed up
   display_sampling_pbar: false  # debug
 #  pytorch_ckpt_path: ${local.model_root_dir}/NCSNPP/wandb/run-20240503_110757-gvq9r51l/checkpoints/checkpoint_21.pth
 
@@ -68,7 +68,6 @@ data:
 #callbacks:
 #  eval_on_dataset:
 #    eval_only_on_existing: true
-
 paths:
   output_dir:  ${local.eval_set_root_dir}/${name}
   log_dir: ${paths.output_dir}

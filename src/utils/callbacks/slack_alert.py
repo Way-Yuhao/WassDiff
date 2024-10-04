@@ -1,3 +1,4 @@
+from typing import Optional
 import traceback
 import socket
 from datetime import datetime
@@ -13,12 +14,15 @@ class SlackAlert(Callback):
     """
 
     def __init__(self, exception_only: bool = False, disabled: bool = False,
-                 ignore_keyboard_interrupt: bool = False):
+                 ignore_keyboard_interrupt: bool = False, at_epoch: Optional[int] = None,
+                 at_global_step: Optional[int] = None):
         """
         Args:
             exception_only (bool): Flag to indicate if the alert should only be sent on exceptions.
             disabled (bool): Flag to indicate if the callback is disabled.
             ignore_keyboard_interrupt (bool): Flag to indicate if keyboard interrupts should be ignored.
+            at_epoch (int): Send slack alert at the end of the specified epoch.
+            at_global_step (int): Send slack alert at the specified global step.
         """
         super().__init__()
         self.exception_only = exception_only
@@ -26,8 +30,31 @@ class SlackAlert(Callback):
         self.exception_occurred = False
         self.disabled = disabled
         self.ignore_keyboard_interrupt = ignore_keyboard_interrupt
-
+        self.at_epoch = at_epoch
+        self.at_global_step = at_global_step
         self.hostname = socket.gethostname()
+
+    def on_train_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        """
+        Send slack alert at the end of the specified epoch.
+        """
+        wandb_run = trainer.logger.experiment
+        wandb_url = wandb_run.url
+        if self.at_epoch is not None and trainer.current_epoch >= self.at_epoch:
+            title = f'Training progress: epoch {self.at_epoch} completed for run `{wandb_run.id}`'
+            self.at_epoch = None
+        elif self.at_global_step is not None and trainer.global_step >= self.at_global_step:
+            title = f'Training progress: global step {self.at_global_step} completed for run `{wandb_run.id}`'
+            self.at_global_step = None
+        else:
+            return
+        now = datetime.now()
+        formatted_time = now.strftime("%Y-%m-%d %H:%M:%S")
+        device = str(trainer.strategy.root_device)
+        message = (f'*{title}*\nTime completed: {formatted_time}\nHostname: {self.hostname}\nDevice: {device}\n'
+                   f'Wandb URL: {wandb_url}\n')
+        alert(message)
+        return
 
     def on_exception(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", exception: BaseException) -> None:
         """
