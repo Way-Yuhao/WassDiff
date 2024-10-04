@@ -38,16 +38,18 @@ class SlackAlert(Callback):
         """
         Send slack alert at the end of the specified epoch.
         """
-        wandb_run = trainer.logger.experiment
-        wandb_url = wandb_run.url
+
         if self.at_epoch is not None and trainer.current_epoch >= self.at_epoch:
-            title = f'Training progress: epoch {self.at_epoch} completed for run `{wandb_run.id}`'
+            title = f'Training progress: epoch {self.at_epoch} completed'
             self.at_epoch = None
         elif self.at_global_step is not None and trainer.global_step >= self.at_global_step:
-            title = f'Training progress: global step {self.at_global_step} completed for run `{wandb_run.id}`'
+            title = f'Training progress: global step {self.at_global_step} completed'
             self.at_global_step = None
         else:
             return
+        wandb_run = trainer.logger.experiment
+        wandb_url = wandb_run.url
+        title += f' for run `{wandb_run.id}`'
         now = datetime.now()
         formatted_time = now.strftime("%Y-%m-%d %H:%M:%S")
         device = str(trainer.strategy.root_device)
