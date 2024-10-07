@@ -1,3 +1,11 @@
+
+# Define a dummy profile decorator if not profiling
+try:
+    profile
+except NameError:
+    def profile(func):
+        return func
+
 import os
 import os.path as p
 from typing import Tuple, Dict, Hashable
@@ -17,8 +25,10 @@ from src.utils.helper import deprecated, yprint, rprint, InfiniteLoader, get_tra
 from src.utils.cpc_utils import read_cpc_file_from, read_cpc_gz_file_from, generate_mrms_dailyagg_12z
 
 # FIXME: for debug only. Remove later
-from torch.profiler import profile, record_function, ProfilerActivity
 from omegaconf import OmegaConf
+# import cProfile
+# import pstats
+# import io
 
 __author__ = 'yuhao liu'
 
@@ -39,12 +49,12 @@ def get_precip_era5_dataset(cfg, eval_num_worker=None, eval_batch_size=None):
     val_sampler = SubsetRandomSampler(val_indices, generator=generator)
 
     train_loader = DataLoader(train_val_dataset, batch_size=cfg.data.batch_size,  # persistent_workers=True,
-                              timeout=3600,  # 120,
+                              timeout=0,  # 120,
                               num_workers=cfg.data.num_workers, sampler=train_sampler)
                               # num_workers=0, sampler=train_sampler)
 
     val_loader = DataLoader(train_val_dataset, batch_size=eval_batch_size if eval_batch_size is not None else cfg.data.batch_size,
-                            timeout=3600,  # 120,
+                            timeout=0,  # 120,
                             num_workers=eval_num_worker if eval_num_worker is not None else cfg.data.num_workers,
                             sampler=val_sampler)
     print('Split dataset into {} training samples and {} validation samples'
@@ -363,7 +373,6 @@ class DailyAggregateRainfallDataset(Dataset):
         mrms_day = mrms_day.sum(dim='time', min_count=23)
         return mrms_day
 
-
     def read_precomputed_mrms_daily_aggregate(self, date_: str) -> xr.DataArray:
         mrms_day = xr.open_dataarray(p.join(self.mrms_path, f'mrms_daily_{date_}.nc'))
         return mrms_day
@@ -436,6 +445,7 @@ class DailyAggregateRainfallDataset(Dataset):
         ds['cpc'] = ds['cpc'].where(valid_mask)
         return ds
 
+    @profile  # Decorator from line_profiler
     def merge_all_dataarrays(self, cpc: xr.DataArray, mrms: xr.DataArray, era5: dict, density: xr.DataArray = None,
                              date_: str = None) -> xr.Dataset:
         """
@@ -450,7 +460,8 @@ class DailyAggregateRainfallDataset(Dataset):
             cpc_interp = self.read_precomputed_cpc_daily_aggregate(date_)
         else:
             cpc_interp = cpc.interp(lon=mrms.lon, lat=mrms.lat, method='linear')
-        valid_mask = np.logical_and(np.isfinite(mrms), np.isfinite(cpc_interp))
+        # valid_mask = np.logical_and(np.isfinite(mrms), np.isfinite(cpc_interp)) # slow
+        valid_mask = np.logical_and(np.isfinite(mrms), np.isfinite(cpc_interp)) # optimized
         if density is not None:
             if self.use_precomputed_cpc:
                 density_interp = self.read_precomputed_cpc_gauge_data(date_)
@@ -957,8 +968,8 @@ def debug_dataloader(cfg):
     Checks run time
     """
 
-    batch_size = 12
-    cfg.data.num_workers = 16
+    batch_size = 4 # 12
+    cfg.data.num_workers = 0 # 12
     cfg.data.batch_size = batch_size
     cfg.data.data_config.use_precomputed_cpc = True
     OmegaConf.set_struct(cfg, False)
@@ -971,25 +982,31 @@ def debug_dataloader(cfg):
 
     progress = get_training_progressbar()
     total_ = 30
-    with profile(activities=[ProfilerActivity.CPU], record_shapes=True) as prof:
-        with progress:
-            task = progress.add_task(f"[Debug] Generating validation inputs", total=total_, start=True)
-            start_time = time.monotonic()
-            for step in range(total_):
-                try:
-                    with record_function("DataLoader __getitem__"):
-                        batch_dict, batch_coord = next(train_iter)
-                    # batch_dict, batch_coord = next(train_iter)
-                    # save batch_dict and batch_coord
-                    progress.update(task, advance=1)
+    # pr = cProfile.Profile()
+    # pr.enable()
+    with progress:
+        task = progress.add_task(f"[Debug] Generating validation inputs", total=total_, start=True)
+        start_time = time.monotonic()
+        for step in range(total_):
+            try:
+                batch_dict, batch_coord = next(train_iter)
+                # save batch_dict and batch_coord
+                progress.update(task, advance=1)
 
-                except RuntimeError:
-                    print("Timeout error occurred. Skipping this batch.")
-                    continue
-            yprint('---------------------------------')
-            stop_time = time.monotonic()
-            yprint(f'Processing time = {dt.timedelta(seconds=stop_time - start_time)}')
-    print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=100))
+            except RuntimeError:
+                print("Timeout error occurred. Skipping this batch.")
+                continue
+        yprint('---------------------------------')
+        stop_time = time.monotonic()
+        yprint(f'Processing time = {dt.timedelta(seconds=stop_time - start_time)}')
+
+    # pr.disable()
+    # s = io.StringIO()
+    # sortby = 'cumulative'
+    # ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+    # ps.print_stats()
+    # print(s.getvalue())
+
     return
 
 
