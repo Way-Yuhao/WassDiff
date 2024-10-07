@@ -4,6 +4,10 @@ defaults:
   - override /model: baseline_corrector
   - _self_
 
+trainer:
+  max_epochs: 50
+  check_val_every_n_epoch: 5
+
 logger:
   wandb:
     project: "WassDiff-Baselines"
@@ -11,6 +15,8 @@ logger:
 callbacks:
   log_precip_data:
     train_log_score_freq: -1
+    train_log_img_freq: 5
+    train_log_param_freq: 5
     show_samples_at_start: true
     report_sample_metrics: false  # due to dim mismatch between model output and gt
 data:

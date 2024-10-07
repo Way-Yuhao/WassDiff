@@ -325,14 +325,16 @@ class CheckCorrector(LightningModule):
 
         loss = self.loss(real, corrected).mean()  # + self.l1_lambda*torch.linalg.norm(corrected.view(-1), 1)
 
-        self.log('train/loss', loss, on_epoch=True, on_step=False, prog_bar=True, logger=True)
+        self.log('train/loss', loss, on_epoch=True, on_step=False, prog_bar=True, logger=True,
+                 batch_size=real.shape[0])
 
         if self.global_step % 100 == 0:
             l1error = F.l1_loss(real, corrected)
             forecast_l1error = F.l1_loss(real, condition[:, 0:1, :, :])
-            self.log('train/forecast_loss', forecast_l1error, on_epoch=True, on_step=False, prog_bar=False, logger=True)
-            self.log('train/our_error_minus_forecast_error', l1error - forecast_l1error, on_epoch=True, on_step=False,
-                     prog_bar=False, logger=True)
+            self.log('train/forecast_loss', forecast_l1error, on_epoch=True, on_step=False, prog_bar=False,
+                     logger=True, batch_size=real.shape[0])
+            self.log('train/our_error_minus_forecast_error', l1error - forecast_l1error, on_epoch=True,
+                     on_step=False, prog_bar=False, logger=True, batch_size=real.shape[0])
 
         return loss
 
@@ -349,26 +351,29 @@ class CheckCorrector(LightningModule):
         l1error = F.l1_loss(real, corrected)
         forecast_l1error = F.l1_loss(real, condition[:, 0:1, :, :])
 
-        self.log('val_loss', l1error, on_epoch=True, prog_bar=True, logger=True)
-        self.log('forecast_loss', forecast_l1error, on_epoch=True, prog_bar=True, logger=True)
-        self.log('our_error_minus_forecast_error', l1error - forecast_l1error, on_epoch=True, prog_bar=True,
-                 logger=True)
+        self.log('val/loss', l1error, on_epoch=True, prog_bar=True, logger=True, batch_size=real.shape[0])
+        self.log('val/forecast_loss', forecast_l1error, on_epoch=True, prog_bar=True, logger=True,
+                 batch_size=real.shape[0])
+        self.log('val/our_error_minus_forecast_error', l1error - forecast_l1error, on_epoch=True, prog_bar=True,
+                 logger=True, batch_size=real.shape[0])
 
         forecast_fss_10 = self.fss(condition, real, threshold=0.1)
         forecast_fss_50 = self.fss(condition, real, threshold=0.5)
         corrected_fss_10 = self.fss(corrected, real, threshold=0.1)
         corrected_fss_50 = self.fss(corrected, real, threshold=0.5)
 
-        self.log('val/forecast_fss_10', forecast_fss_10.mean(), on_epoch=True, prog_bar=False, logger=True)
-        self.log('val/forecast_fss_50', forecast_fss_50.mean(), on_epoch=True, prog_bar=False, logger=True)
-        self.log('val/corrected_fss_10', corrected_fss_10.mean(), on_epoch=True, prog_bar=False, logger=True)
-        self.log('val/corrected_fss_50', corrected_fss_50.mean(), on_epoch=True, prog_bar=False, logger=True)
-
+        self.log('val/forecast_fss_10', forecast_fss_10.mean(), on_epoch=True, prog_bar=False, logger=True,
+                 batch_size=real.shape[0])
+        self.log('val/forecast_fss_50', forecast_fss_50.mean(), on_epoch=True, prog_bar=False, logger=True,
+                 batch_size=real.shape[0])
+        self.log('val/corrected_fss_10', corrected_fss_10.mean(), on_epoch=True, prog_bar=False, logger=True,
+                 batch_size=real.shape[0])
+        self.log('val/corrected_fss_50', corrected_fss_50.mean(), on_epoch=True, prog_bar=False, logger=True,
+                 batch_size=real.shape[0])
         step_output = {"batch_dict": batch_dict, "condition": condition}
-        # TODO: calculate and report validation metrics
         return step_output
 
-    def printgradnorm(self, module, grad_input, grad_output):
+    def print_grad_norm(self, module, grad_input, grad_output):
         print('Inside ' + module.__class__.__name__ + ' backward')
         print('Inside class:' + self.__class__.__name__)
         print('')
