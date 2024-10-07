@@ -10,8 +10,8 @@ import matplotlib.pyplot as plt
 # import xarray as xr
 # import xskillscore as xs
 
-# from src.utils.corrector_gan_utils.utils import tqdm, device
 from src.models.baselines.corrector_gan.layers import *
+from src.models.baselines.corrector_gan.models import Corrector
 # from src.utils.corrector_gan_utils.dataloader import log_retrans
 from src.utils.corrector_gan_utils.loss import *
 from src.utils.ncsn_utils import datasets as datasets
@@ -262,3 +262,194 @@ class CorrectorGan(LightningModule):
         """
         return F.interpolate(condition, size=(self.noise_shape[-2], self.noise_shape[-1]), mode='bilinear')
 
+
+class CheckCorrector(LightningModule):
+    def __init__(self, input_channels=15, cond_idx=0, real_idx=1, model_config: Dict = {}):
+        super().__init__()
+        self.cond_idx = cond_idx
+        self.real_idx = real_idx
+        self.corrector = Corrector(input_channels=input_channels)
+        self.downsample = F.interpolate
+        #         self.loss = nn.MSELoss()
+        self.l1loss = nn.L1Loss()
+        self.l1_lambda = 0.0000
+        self.fss_window = 4
+        self.fss_lambda = 1
+        self.fss_pool = nn.AvgPool2d(kernel_size=self.fss_window, padding=0, stride=1)
+        # self.fss_pool.register_full_backward_hook(self.printgradnorm)
+        self.sigmoid = nn.Sigmoid()
+        # self.fss_pool.register_full_backward_hook(self.printgradnorm)
+        # self.fss_dbg = DBGModule()
+        # self.fss_dbg.register_full_backward_hook(self.printgradnorm)
+
+        # additional params absent in the original code
+        self.model_config = model_config
+        self.scaler = None
+        self.inverse_scaler = None
+
+    def configure_optimizers(self):
+        ### additional steps related to WassDiff dataset
+        # Create data normalizer and its inverse
+        self.scaler = datasets.get_data_scaler(self.model_config)
+        self.inverse_scaler = datasets.get_data_inverse_scaler(self.model_config)
+        #######
+        opt = optim.Adam(self.corrector.parameters(), eps=5e-5, lr=5e-5, betas=(0, 0.9), weight_decay=1e-4)
+        return opt
+
+    def loss(self, real, corrected):
+        #        if torch.sum(torch.isnan(self.fss(corrected, real, threshold = 0.5)))>0:
+        #            print("nan fss")
+        #        if torch.sum(torch.isnan(self.l1loss(real, corrected)))>0:
+        #            print("nan l1loss")
+        return self.l1loss(real, corrected) + self.fss_lambda * self.fss(corrected, real, threshold=0.5)
+
+    def forward(self, condition, noise):
+        return self.gen(condition, noise)
+
+    def training_step(self, batch, batch_idx):
+        batch_dict, _ = batch
+        condition, real = self._generate_condition(batch_dict)
+        # condition = self._downscale_condition(condition)
+
+        #        if torch.sum(torch.isnan(condition))>0:
+        #            print("nan condition")
+
+        #        if torch.sum(torch.isnan(real))>0:
+        #            print("nan real")
+
+        real = self.downsample(real, scale_factor=0.125, mode='bilinear', align_corners=False)
+        condition = self.downsample(condition, scale_factor=0.125, mode='bilinear',
+                                    align_corners=False)  # modified by Yuhao
+
+        corrected = self.corrector(condition)
+
+        loss = self.loss(real, corrected).mean()  # + self.l1_lambda*torch.linalg.norm(corrected.view(-1), 1)
+
+        self.log('train/loss', loss, on_epoch=True, on_step=False, prog_bar=True, logger=True)
+
+        if self.global_step % 100 == 0:
+            l1error = F.l1_loss(real, corrected)
+            forecast_l1error = F.l1_loss(real, condition[:, 0:1, :, :])
+            self.log('train/forecast_loss', forecast_l1error, on_epoch=True, on_step=False, prog_bar=False, logger=True)
+            self.log('train/our_error_minus_forecast_error', l1error - forecast_l1error, on_epoch=True, on_step=False,
+                     prog_bar=False, logger=True)
+
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        batch_dict, _ = batch
+        condition, real = self._generate_condition(batch_dict)
+        # condition = self._downscale_condition(condition)
+
+        condition = self.downsample(condition, scale_factor=0.125, mode='bilinear', align_corners=False)  # modified by Yuhao
+
+        real = self.downsample(real, scale_factor=0.125, mode='bilinear', align_corners=False)
+        corrected = self.corrector(condition)
+
+        l1error = F.l1_loss(real, corrected)
+        forecast_l1error = F.l1_loss(real, condition[:, 0:1, :, :])
+
+        self.log('val_loss', l1error, on_epoch=True, prog_bar=True, logger=True)
+        self.log('forecast_loss', forecast_l1error, on_epoch=True, prog_bar=True, logger=True)
+        self.log('our_error_minus_forecast_error', l1error - forecast_l1error, on_epoch=True, prog_bar=True,
+                 logger=True)
+
+        forecast_fss_10 = self.fss(condition, real, threshold=0.1)
+        forecast_fss_50 = self.fss(condition, real, threshold=0.5)
+        corrected_fss_10 = self.fss(corrected, real, threshold=0.1)
+        corrected_fss_50 = self.fss(corrected, real, threshold=0.5)
+
+        self.log('val/forecast_fss_10', forecast_fss_10.mean(), on_epoch=True, prog_bar=False, logger=True)
+        self.log('val/forecast_fss_50', forecast_fss_50.mean(), on_epoch=True, prog_bar=False, logger=True)
+        self.log('val/corrected_fss_10', corrected_fss_10.mean(), on_epoch=True, prog_bar=False, logger=True)
+        self.log('val/corrected_fss_50', corrected_fss_50.mean(), on_epoch=True, prog_bar=False, logger=True)
+
+        step_output = {"batch_dict": batch_dict, "condition": condition}
+        # TODO: calculate and report validation metrics
+        return step_output
+
+    def printgradnorm(self, module, grad_input, grad_output):
+        print('Inside ' + module.__class__.__name__ + ' backward')
+        print('Inside class:' + self.__class__.__name__)
+        print('')
+        print('grad_input: ', type(grad_input))
+        print('grad_input[0]: ', torch.reshape(grad_input[0], (-1,)))
+        print('grad_output: ', type(grad_output))
+        print('grad_output[0]: ', grad_output[0])
+        print('')
+        print('grad_input size:', grad_input[0].size())
+        print('grad_output size:', grad_output[0].size())
+        print('grad_input norm:', grad_input[0].norm())
+        print('grad_output norm:', grad_output[0].norm())
+        print('')
+        print('grad_input num nans:', torch.sum(torch.isnan(grad_input[0])))
+        print('grad_output num nans:', torch.sum(torch.isnan(grad_output[0])))
+
+    def fss(self, x, y, threshold):
+        c = 200
+        x_mask = self.sigmoid(c * (x - threshold))
+        y_mask = self.sigmoid(c * (y - threshold))
+
+        y_out = self.fss_pool(y_mask)
+        x_out = self.fss_pool(x_mask[:, 0:1, :, :])
+
+        mse_sample = torch.mean(torch.square(x_out - y_out), dim=[1, 2, 3])
+        # mse_ref = torch.mean(torch.square(x_out), dim=[1,2,3]) +  torch.mean(torch.square(y_out), dim=[1,2,3])
+
+        # mse_ref = self.fss_dbg(x_out, y_out)
+        # nonzero_mseref = mse_ref!=0
+        # fss = 1 - torch.divide(mse_sample[nonzero_mseref], mse_ref[nonzero_mseref])
+
+        # return torch.mean(fss)
+        return mse_sample
+
+    #         mse = torch.zeros(len(x_mask), device=self.device)
+    #         for sample in range(len(x_mask)):
+    #             y_out = self.fss_conv(y_mask[sample].unsqueeze(0).type(torch.half))/window_size
+    #             x_out = self.fss_conv(x_mask[sample, 0:1, :, :].unsqueeze(0).type(torch.half))/window_size
+    #             mse_sample = torch.mean(torch.square(x_out - y_out))
+    #             mse_ref = torch.mean(torch.square(x_out)) +  torch.mean(torch.square(y_out))
+    #             if mse_ref == 0:
+    #                 continue
+    #             fss_sample = 1 - (mse_sample / mse_ref)
+    #             mse[sample] = fss_sample
+
+    #         return torch.mean(mse)
+
+    def _generate_condition(self, batch_dict: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+        y = self.scaler(batch_dict['precip_gt'])  # .to(config.device))
+
+        if self.model_config.data.condition_mode == 0:
+            raise AttributeError()  # deprecated
+        elif self.model_config.data.condition_mode == 1:
+            condition = batch_dict['precip_up']
+        elif self.model_config.data.condition_mode in [2, 6]:
+            exclude_keys = ['precip_lr', 'precip_gt']
+            tensors_to_stack = [tensor for key, tensor in batch_dict.items() if key not in exclude_keys]
+            stacked_tensor = torch.cat(tensors_to_stack, dim=1)
+            condition = stacked_tensor
+        elif self.model_config.data.condition_mode == 3:
+            exclude_keys = ['precip_lr', 'precip_gt', 'precip_up']
+            tensors_to_stack = [tensor for key, tensor in batch_dict.items() if key not in exclude_keys]
+            stacked_tensor = torch.cat(tensors_to_stack, dim=1)
+            condition = stacked_tensor
+        elif self.model_config.data.condition_mode == 4:
+            condition = batch_dict['precip_masked']
+        elif self.model_config.data.condition_mode == 5:
+            exclude_keys = ['precip_gt', 'mask']
+            tensors_to_stack = [tensor for key, tensor in batch_dict.items() if key not in exclude_keys]
+            stacked_tensor = torch.cat(tensors_to_stack, dim=1)
+            condition = stacked_tensor
+        else:
+            raise AttributeError()
+        return condition, y
+
+    def sample(self, condition: torch.Tensor):
+        return self.corrector(condition)
+
+    # def _downscale_condition(self, condition: torch.Tensor) -> torch.Tensor:
+    #     """
+    #     WassDiff dataloader returns upsampled condition that matches the dim out expected output. This function
+    #     downscales the condition to the reduced size
+    #     """
+    #     return F.interpolate(condition, size=(self.noise_shape[-2], self.noise_shape[-1]), mode='bilinear')

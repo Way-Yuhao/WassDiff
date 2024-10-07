@@ -1,0 +1,17 @@
+# adopted from https://github.com/raspstephan/nwp-downscale/blob/main/notebooks/train-corrector.py
+
+_target_: src.models.baselines.corrector_gan.lit_module.CheckCorrector
+input_channels: 8
+
+# additional params
+model_config:
+  data:
+    image_size: ${data.data_config.image_size}
+    condition_mode: ${data.data_config.condition_mode}
+    num_channels: ${data.data_config.num_channels}
+    num_context_chs: ${data.data_config.num_context_chs}
+    condition_size: ${data.data_config.condition_size}
+    centered: ${data.data_config.centered}
+    precip_rescale_c: ${data.data_config.precip_rescale_c}
+  sampling:
+    sampling_batch_size: 12

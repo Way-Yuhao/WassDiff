@@ -17,7 +17,8 @@ class PrecipDataLogger(Callback):
     def __init__(self, train_log_img_freq: int = 1000, train_log_score_freq: int = 1000,
                  train_log_param_freq: int = 1000, show_samples_at_start: bool = False,
                  show_unconditional_samples: bool = False, check_freq_via: str = 'global_step',
-                 enable_save_ckpt: bool = False, add_reference_artifact: bool = False):
+                 enable_save_ckpt: bool = False, add_reference_artifact: bool = False,
+                 report_sample_metrics: bool = True):
         """
         Callback to log images, scores and parameters to wandb.
         :param train_log_img_freq: frequency to log images. Set to -1 to disable
@@ -28,6 +29,7 @@ class PrecipDataLogger(Callback):
         :param check_freq_via: whether to check frequency via 'global_step' or 'epoch'
         :param enable_save_ckpt: whether to save checkpoint
         :param add_reference_artifact: whether to add the checkpoint as a reference artifact
+        :param report_sample_metrics: whether to report sample metrics
         """
         super().__init__()
 
@@ -38,6 +40,7 @@ class PrecipDataLogger(Callback):
         self.show_unconditional_samples = show_unconditional_samples
         self.enable_save_ckpt = enable_save_ckpt
         self.add_reference_artifact = add_reference_artifact
+        self.report_sample_metrics = report_sample_metrics
 
         if self.show_unconditional_samples:
             raise NotImplementedError('Unconditional samples not implemented yet.')
@@ -155,11 +158,12 @@ class PrecipDataLogger(Callback):
         self.log_conditional_samples_scaled(low_res_display, sample, gt, n=s)
 
         # log sample metrics
-        mae =  calc_mae(sample.cpu().detach().numpy(), gt[0:s, :, :, :].cpu().detach().numpy(), valid_mask=None, k=1,
-                        pooling_func='mean')
-        bias = calc_bias(sample.cpu().detach().numpy(), gt[0:s, :, :, :].cpu().detach().numpy(), valid_mask=None, k=1,
-                         pooling_func='mean')
-        wandb.log({'val/sample_mae': mae, 'val/sample_bias': bias, 'epoch': trainer.current_epoch})
+        if self.report_sample_metrics:
+            mae =  calc_mae(sample.cpu().detach().numpy(), gt[0:s, :, :, :].cpu().detach().numpy(), valid_mask=None, k=1,
+                            pooling_func='mean')
+            bias = calc_bias(sample.cpu().detach().numpy(), gt[0:s, :, :, :].cpu().detach().numpy(), valid_mask=None, k=1,
+                             pooling_func='mean')
+            wandb.log({'val/sample_mae': mae, 'val/sample_bias': bias, 'epoch': trainer.current_epoch})
         
         self._revert_pbar_desc(pbar_taskid, original_pbar_desc)
         return
