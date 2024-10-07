@@ -1,5 +1,3 @@
-__author__ = 'yuhao liu'
-
 import os
 import os.path as p
 from typing import Tuple, Dict, Hashable
@@ -18,31 +16,36 @@ from matplotlib import pyplot as plt
 from src.utils.helper import deprecated, yprint, rprint, InfiniteLoader, get_training_progressbar
 from src.utils.cpc_utils import read_cpc_file_from, read_cpc_gz_file_from, generate_mrms_dailyagg_12z
 
+# FIXME: for debug only. Remove later
+from torch.profiler import profile, record_function, ProfilerActivity
+from omegaconf import OmegaConf
+
+__author__ = 'yuhao liu'
 
 
-def get_precip_era5_dataset(config, eval_num_worker=None, eval_batch_size=None):
+def get_precip_era5_dataset(cfg, eval_num_worker=None, eval_batch_size=None):
     print('------ Dataset statistics -------')
-    if config.data.uniform_dequantization:
+    if cfg.data.data_config.uniform_dequantization:
         raise NotImplementedError('Uniform dequantization not yet supported.')
-    if config.mode != 'train':
-        raise NotImplementedError('Evaluation not yet supported.')
-    train_val_dataset = DailyAggregateRainfallDataset(config)
+    # if config.mode != 'train':
+    #     raise NotImplementedError('Evaluation not yet supported.')
+    train_val_dataset = DailyAggregateRainfallDataset(cfg.data.data_config)
     dataset_size = len(train_val_dataset)
     indices = list(range(dataset_size))
-    split = int(np.floor(config.data.train_val_split * dataset_size))
+    split = int(np.floor(cfg.data.train_val_split * dataset_size))
     train_indices, val_indices = indices[split:], indices[:split]
-    generator = torch.Generator().manual_seed(config.seed)
+    generator = torch.Generator().manual_seed(cfg.seed)
     train_sampler = SubsetRandomSampler(train_indices, generator=generator)
     val_sampler = SubsetRandomSampler(val_indices, generator=generator)
 
-    train_loader = DataLoader(train_val_dataset, batch_size=config.data.batch_size, # persistent_workers=True,
-                              timeout=3600, # 120,
-                              num_workers=config.hardware.num_workers, sampler=train_sampler)
+    train_loader = DataLoader(train_val_dataset, batch_size=cfg.data.batch_size,  # persistent_workers=True,
+                              timeout=3600,  # 120,
+                              num_workers=cfg.data.num_workers, sampler=train_sampler)
                               # num_workers=0, sampler=train_sampler)
 
-    val_loader = DataLoader(train_val_dataset, batch_size=eval_batch_size if eval_batch_size is not None else config.data.batch_size,
-                            timeout=3600, # 120,
-                            num_workers=eval_num_worker if eval_num_worker is not None else config.hardware.num_workers,
+    val_loader = DataLoader(train_val_dataset, batch_size=eval_batch_size if eval_batch_size is not None else cfg.data.batch_size,
+                            timeout=3600,  # 120,
+                            num_workers=eval_num_worker if eval_num_worker is not None else cfg.data.num_workers,
                             sampler=val_sampler)
     print('Split dataset into {} training samples and {} validation samples'
           .format(len(train_indices), len(val_indices)))
@@ -949,39 +952,48 @@ class DailyAggregateRainfallDataset(Dataset):
         return xarray_batch
 
 
-def debug_dataloader(config):
+def debug_dataloader(cfg):
     """
     Checks run time
     """
+
     batch_size = 12
-    config.hardware.num_workers = 16
-    config.data.batch_size = batch_size
-    config.data.use_precomputed_cpc = True
-    train_loader, eval_loader, dateset = get_precip_era5_dataset(config, eval_num_worker=config.hardware.num_workers)
+    cfg.data.num_workers = 16
+    cfg.data.batch_size = batch_size
+    cfg.data.data_config.use_precomputed_cpc = True
+    OmegaConf.set_struct(cfg, False)
+
+    cfg.data.train_val_split = 0.8
+    cfg.seed = 42
+    train_loader, eval_loader, dateset = get_precip_era5_dataset(cfg, eval_num_worker=cfg.data.num_workers)
     train_iter = iter(train_loader)
     eval_iter = iter(eval_loader)
 
     progress = get_training_progressbar()
-    total_ = 10
-    with progress:
-        task = progress.add_task(f"Generating validation inputs", total=total_, start=True)
-        start_time = time.monotonic()
-        for step in range(total_):
-            try:
-                batch_dict, batch_coord = next(train_iter)
-                # save batch_dict and batch_coord
-                progress.update(task, advance=1)
+    total_ = 30
+    with profile(activities=[ProfilerActivity.CPU], record_shapes=True) as prof:
+        with progress:
+            task = progress.add_task(f"[Debug] Generating validation inputs", total=total_, start=True)
+            start_time = time.monotonic()
+            for step in range(total_):
+                try:
+                    with record_function("DataLoader __getitem__"):
+                        batch_dict, batch_coord = next(train_iter)
+                    # batch_dict, batch_coord = next(train_iter)
+                    # save batch_dict and batch_coord
+                    progress.update(task, advance=1)
 
-            except RuntimeError:
-                print("Timeout error occurred. Skipping this batch.")
-                continue
-        yprint('---------------------------------')
-        stop_time = time.monotonic()
-        yprint(f'Processing time = {dt.timedelta(seconds=stop_time - start_time)}')
+                except RuntimeError:
+                    print("Timeout error occurred. Skipping this batch.")
+                    continue
+            yprint('---------------------------------')
+            stop_time = time.monotonic()
+            yprint(f'Processing time = {dt.timedelta(seconds=stop_time - start_time)}')
+    print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=100))
     return
 
 
 if __name__ == '__main__':
-    with initialize(version_base=None, config_path="../configs", job_name="evaluation"):
-        config = compose(config_name="downscale_cpc_density")
-        debug_dataloader(config)
+    with initialize(version_base=None, config_path="../../configs", job_name="evaluation"):
+        config = compose(config_name="train")
+    debug_dataloader(config)
