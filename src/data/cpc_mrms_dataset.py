@@ -1,11 +1,3 @@
-
-# Define a dummy profile decorator if not profiling
-try:
-    profile
-except NameError:
-    def profile(func):
-        return func
-
 import os
 import os.path as p
 from typing import Tuple, Dict, Hashable
@@ -26,9 +18,6 @@ from src.utils.cpc_utils import read_cpc_file_from, read_cpc_gz_file_from, gener
 
 # FIXME: for debug only. Remove later
 from omegaconf import OmegaConf
-# import cProfile
-# import pstats
-# import io
 
 __author__ = 'yuhao liu'
 
@@ -445,9 +434,9 @@ class DailyAggregateRainfallDataset(Dataset):
         ds['cpc'] = ds['cpc'].where(valid_mask)
         return ds
 
-    @profile  # Decorator from line_profiler
+    # @profile  # Decorator from line_profiler
     def merge_all_dataarrays(self, cpc: xr.DataArray, mrms: xr.DataArray, era5: dict, density: xr.DataArray = None,
-                             date_: str = None) -> xr.Dataset:
+                             date_: str = None) -> Tuple[xr.Dataset, xr.DataArray]:
         """
         Merges the daily aggregate precipitation data from CPC and MRMS datasets.
         * Defines mutually valid region (where both precip products have valid data)
@@ -461,7 +450,7 @@ class DailyAggregateRainfallDataset(Dataset):
         else:
             cpc_interp = cpc.interp(lon=mrms.lon, lat=mrms.lat, method='linear')
         # valid_mask = np.logical_and(np.isfinite(mrms), np.isfinite(cpc_interp)) # slow
-        valid_mask = np.logical_and(np.isfinite(mrms), np.isfinite(cpc_interp)) # optimized
+        valid_mask = mrms.notnull() & cpc_interp.notnull() # optimized
         if density is not None:
             if self.use_precomputed_cpc:
                 density_interp = self.read_precomputed_cpc_gauge_data(date_)
@@ -471,8 +460,6 @@ class DailyAggregateRainfallDataset(Dataset):
         if self.use_precomputed_era5:
             era5_merged = era5
         else:
-            # for k, v in era5.items():
-            #     era5[k] = v.interp(lon=mrms.lon, lat=mrms.lat, method='linear')
             era5_merged = xr.Dataset(era5)
             era5_merged = era5_merged.interp(lon=mrms.lon, lat=mrms.lat, method='linear')
 
@@ -967,9 +954,8 @@ def debug_dataloader(cfg):
     """
     Checks run time
     """
-
-    batch_size = 4 # 12
-    cfg.data.num_workers = 0 # 12
+    batch_size = 12 # 12
+    cfg.data.num_workers = 12
     cfg.data.batch_size = batch_size
     cfg.data.data_config.use_precomputed_cpc = True
     OmegaConf.set_struct(cfg, False)
@@ -982,8 +968,6 @@ def debug_dataloader(cfg):
 
     progress = get_training_progressbar()
     total_ = 30
-    # pr = cProfile.Profile()
-    # pr.enable()
     with progress:
         task = progress.add_task(f"[Debug] Generating validation inputs", total=total_, start=True)
         start_time = time.monotonic()
@@ -999,14 +983,6 @@ def debug_dataloader(cfg):
         yprint('---------------------------------')
         stop_time = time.monotonic()
         yprint(f'Processing time = {dt.timedelta(seconds=stop_time - start_time)}')
-
-    # pr.disable()
-    # s = io.StringIO()
-    # sortby = 'cumulative'
-    # ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-    # ps.print_stats()
-    # print(s.getvalue())
-
     return
 
 
