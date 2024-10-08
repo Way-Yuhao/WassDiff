@@ -886,7 +886,7 @@ class LeinDisc(nn.Module):
         hr = nn.AvgPool2d(16)(hr)
         lr = nn.AvgPool2d(16)(lr)
         out = torch.cat((torch.reshape(hr, (hr.shape[0], -1)), torch.reshape(lr, (lr.shape[0], -1))), axis=1)
-        out = F.leaky_relu(self.dense1(out), negative_slope=0.02)
+        out = F.leaky_relu(self.dense1(out), negative_slope=0.02)  # FIXME: does not support 256 x 256
         out = self.dense2(out)
         return out
 

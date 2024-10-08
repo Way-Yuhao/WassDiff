@@ -616,10 +616,3 @@ class CheckCorrector(LightningModule):
 
     def sample(self, condition: torch.Tensor):
         return self.corrector(condition)
-
-    # def _downscale_condition(self, condition: torch.Tensor) -> torch.Tensor:
-    #     """
-    #     WassDiff dataloader returns upsampled condition that matches the dim out expected output. This function
-    #     downscales the condition to the reduced size
-    #     """
-    #     return F.interpolate(condition, size=(self.noise_shape[-2], self.noise_shape[-1]), mode='bilinear')
