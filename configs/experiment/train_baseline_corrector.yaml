@@ -1,4 +1,5 @@
 # @package _global_
+# Stage 1 training of CorrectorGAN: train Corrector Block
 
 defaults:
   - override /model: baseline_corrector

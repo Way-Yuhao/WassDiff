@@ -1,4 +1,5 @@
 # @package _global_
+# Stage 3 training of CorrectorGAN: adversarial training
 
 defaults:
   - override /model: baseline_corrector_gan

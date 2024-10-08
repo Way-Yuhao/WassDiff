@@ -1,4 +1,5 @@
 # @package _global_
+# Stage 2 training of CorrectorGAN: train Generator
 
 defaults:
   - override /model: baseline_corrector_gen

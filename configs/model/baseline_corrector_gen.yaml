@@ -1,3 +1,4 @@
+
 _target_: src.models.baselines.corrector_gan.lit_module.GANGenerator
 
 generator:
