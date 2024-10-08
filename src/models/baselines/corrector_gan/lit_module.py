@@ -27,7 +27,7 @@ class CorrectorGan(LightningModule):
                  loss_hparams={'disc_loss': "wasserstein", 'gen_loss': "wasserstein", 'lambda_gp': 10},
                  val_hparams={'val_nens': 10, 'tp_log': 0.01, 'ds_max': 50, 'ds_min': 0},
                  model_config: Dict = {}, automatic_optimization: bool = False,
-                 use_gradient_clipping: bool = False):  # fill in
+                 use_gradient_clipping: bool = False, gen_ckpt: Optional[str] = None):  # fill in
         super().__init__()
 
         self.noise_shape = noise_shape
@@ -42,6 +42,7 @@ class CorrectorGan(LightningModule):
         self.upsample_input = nn.Upsample(scale_factor=8)
         self.zero_noise = zero_noise
         self.use_gradient_clipping = use_gradient_clipping
+        self.gen_ckpt = gen_ckpt
 
         if disc_spectral_norm:
             self.disc.apply(self.add_sn)
@@ -56,6 +57,20 @@ class CorrectorGan(LightningModule):
         self.rainfall_dataset = None
 
         self.save_hyperparameters()
+
+    def setup(self, stage: str) -> None:
+        # resume from stage 2 (GAN high-res pre-training)
+        if self.gen_ckpt is not None:
+            print("Loading Generator weights...")
+            checkpoint = torch.load(self.gen_ckpt)
+            loaded_state_dict = checkpoint['state_dict']
+            new_state_dict = {}
+            prefix = 'gen.'
+            for key, value in loaded_state_dict.items():
+                # remove the prefix
+                new_key = key[len(prefix):]
+                new_state_dict[new_key] = value
+            self.gen.load_state_dict(new_state_dict)
 
     def configure_optimizers(self):
 
@@ -84,7 +99,7 @@ class CorrectorGan(LightningModule):
             raise NotImplementedError
         # return [{"optimizer": disc_opt, "frequency": self.opt_hparams['disc_freq']},
         #         {"optimizer": gen_opt, "frequency": self.opt_hparams['gen_freq']}]
-        return [disc_opt, gen_opt]
+        return [gen_opt, disc_opt]
 
     def on_validation_start(self) -> None:
         self.rainfall_dataset = self.trainer.datamodule.precip_dataset

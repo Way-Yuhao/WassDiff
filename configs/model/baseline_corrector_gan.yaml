@@ -19,8 +19,8 @@ use_gradient_clipping: false
 opt_hparams:
   gen_optimiser: 'adam'
   disc_optimiser: 'adam'
-  disc_lr: 1e-6 #5e-5
-  gen_lr: 1e-5 # 5e-5
+  disc_lr: 5e-5
+  gen_lr: 5e-5
   gen_freq: 1
   disc_freq: 5
   b1: 0.0
