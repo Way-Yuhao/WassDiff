@@ -17,6 +17,7 @@ from src.utils.corrector_gan_utils.loss import *
 from src.utils.ncsn_utils import datasets as datasets
 from src.utils.metrics import calc_mae, calc_bias, calc_crps
 
+
 class CorrectorGan(LightningModule):
     def __init__(self, generator, discriminator, noise_shape, input_channels=1,
                  cond_idx=0, real_idx=1,
@@ -263,7 +264,168 @@ class CorrectorGan(LightningModule):
         return F.interpolate(condition, size=(self.noise_shape[-2], self.noise_shape[-1]), mode='bilinear')
 
 
+class GANGenerator(LightningModule):
+
+    def __init__(self, generator, noise_shape, input_channels=1, cond_idx=0, real_idx=1,
+                 gen_spectral_norm=False, zero_noise=False,
+                 # opt_hparams={'gen_optimiser': 'adam', 'disc_optimiser': 'adam', 'disc_lr': 1e-4, 'gen_lr': 1e-4,
+                 #              'gen_freq': 1, 'disc_freq': 5, 'b1': 0.0, 'b2': 0.9},
+                 # loss_hparams={'disc_loss': "wasserstein", 'gen_loss': "wasserstein", 'lambda_gp': 10},
+                 # val_hparams={'val_nens': 10, 'tp_log': 0.01, 'ds_max': 50, 'ds_min': 0},
+                 model_config: Dict = {}, automatic_optimization: bool = False,
+                 use_gradient_clipping: bool = False, corrector_ckpt: Optional[str] = None):  # fill in
+        super().__init__()
+
+        self.noise_shape = noise_shape
+        self.gen = generator(input_channels=input_channels)
+        self.real_idx = real_idx
+        self.cond_idx = cond_idx
+        # self.opt_hparams = opt_hparams
+        # self.loss_hparams = loss_hparams
+        self.input_channels = input_channels
+        # self.val_hparams = val_hparams
+        self.upsample_input = nn.Upsample(scale_factor=8)
+        self.zero_noise = zero_noise
+        self.use_gradient_clipping = use_gradient_clipping
+        self.corrector_ckpt = corrector_ckpt
+
+        if gen_spectral_norm:
+            self.gen.apply(self.add_sn)
+
+        # additional params absent in the original code
+        self.automatic_optimization = automatic_optimization
+        self.model_config = model_config
+        self.l1loss = nn.L1Loss()
+
+        # to be defined elsewhere
+        self.rainfall_dataset = None
+        self.scaler = None
+        self.inverse_scaler = None
+        self.save_hyperparameters()
+
+    def setup(self, stage: str) -> None:
+        print("Initializing G weights...")
+        self.gen.initialize_weights()
+        if self.corrector_ckpt is not None:
+            print("Loading Corrector weights...")
+            checkpoint = torch.load(self.corrector_ckpt)
+            # self.gen.corrector.load_state_dict(weight['state_dict'])
+            loaded_state_dict = checkpoint['state_dict']
+            # Initialize a new state_dict for the Conv2d layer
+            conv_state_dict = {}
+            prefix = 'corrector.final.'
+            # Extract and map the relevant keys
+            for key in loaded_state_dict:
+                if key == f'{prefix}weight':
+                    conv_state_dict['weight'] = loaded_state_dict[key]
+                elif key == f'{prefix}bias':
+                    conv_state_dict['bias'] = loaded_state_dict[key]
+
+            # Check if both weight and bias are extracted
+            if 'weight' in conv_state_dict and 'bias' in conv_state_dict:
+                # Load the state_dict into the Conv2d layer
+                self.gen.corrector.load_state_dict(conv_state_dict)
+            else:
+                raise KeyError("Required keys 'weight' and 'bias' not found in the loaded state_dict.")
+
+    def configure_optimizers(self):
+        ### additional steps related to WassDiff dataset
+        # Create data normalizer and its inverse
+        self.scaler = datasets.get_data_scaler(self.model_config)
+        self.inverse_scaler = datasets.get_data_inverse_scaler(self.model_config)
+        #######
+        opt = optim.Adam(self.gen.parameters(), eps=5e-5, lr=5e-5, betas=(0, 0.9), weight_decay=1e-4)
+        return opt
+
+    def loss(self, real, real_lr, corrected, fake):
+        gen_l1_loss = self.l1loss(real, fake)
+        corrector_l1_loss = self.l1loss(real_lr, corrected)
+        loss = gen_l1_loss + corrector_l1_loss
+        loss_dict = {'gen_l1_loss': gen_l1_loss, 'corrector_l1_loss': corrector_l1_loss}
+        return loss, loss_dict
+
+
+    def training_step(self, batch: Dict[str, torch.Tensor], batch_idx: int):
+        batch_dict, _ = batch
+        condition, real = self._generate_condition(batch_dict)
+        condition = self._downscale_condition(condition)
+        real_lr = self._downscale_condition(real)
+
+        if self.zero_noise:
+            noise = torch.zeros(real.shape[0], *self.noise_shape[-3:], device=self.device)
+        else:
+            noise = torch.randn(real.shape[0], *self.noise_shape[-3:], device=self.device)
+        fake, corrected_lr = self.gen(condition, noise)
+        loss, loss_dict = self.loss(real, real_lr, corrected_lr, fake)
+
+        self.log('train/loss', loss, on_epoch=True, on_step=False, prog_bar=True, logger=True, batch_size=real.shape[0])
+        self.log('train/gen_l1_loss', loss_dict['gen_l1_loss'], on_epoch=True, on_step=False, prog_bar=True, logger=True, batch_size=real.shape[0])
+        self.log('train/corrector_l1_loss', loss_dict['corrector_l1_loss'], on_epoch=True, on_step=False, prog_bar=True, logger=True, batch_size=real.shape[0])
+        return loss
+
+    def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int):
+        batch_dict, _ = batch
+        condition, real = self._generate_condition(batch_dict)
+        condition = self._downscale_condition(condition)
+        real_lr = self._downscale_condition(real)
+
+        if self.zero_noise:
+            noise = torch.zeros(real.shape[0], *self.noise_shape[-3:], device=self.device)
+        else:
+            noise = torch.randn(real.shape[0], *self.noise_shape[-3:], device=self.device)
+        fake, corrected_lr = self.gen(condition, noise)
+        loss, loss_dict = self.loss(real, real_lr, corrected_lr, fake)
+
+        self.log('val/loss', loss, on_epoch=True, on_step=False, prog_bar=True, logger=True, batch_size=real.shape[0])
+        self.log('val/gen_l1_loss', loss_dict['gen_l1_loss'], on_epoch=True, on_step=False, prog_bar=True, logger=True, batch_size=real.shape[0])
+        self.log('val/corrector_l1_loss', loss_dict['corrector_l1_loss'], on_epoch=True, on_step=False, prog_bar=True, logger=True, batch_size=real.shape[0])
+
+        step_output = {"batch_dict": batch_dict, "condition": condition}
+        return step_output
+
+    def sample(self, condition: torch.Tensor):
+        noise = torch.randn(condition.shape[0], *self.noise_shape[-3:], device=self.device)
+        fake, _ = self.gen(condition, noise)
+        return fake
+
+    def _generate_condition(self, batch_dict: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+        y = self.scaler(batch_dict['precip_gt'])  # .to(config.device))
+
+        if self.model_config.data.condition_mode == 0:
+            raise AttributeError()  # deprecated
+        elif self.model_config.data.condition_mode == 1:
+            condition = batch_dict['precip_up']
+        elif self.model_config.data.condition_mode in [2, 6]:
+            exclude_keys = ['precip_lr', 'precip_gt']
+            tensors_to_stack = [tensor for key, tensor in batch_dict.items() if key not in exclude_keys]
+            stacked_tensor = torch.cat(tensors_to_stack, dim=1)
+            condition = stacked_tensor
+        elif self.model_config.data.condition_mode == 3:
+            exclude_keys = ['precip_lr', 'precip_gt', 'precip_up']
+            tensors_to_stack = [tensor for key, tensor in batch_dict.items() if key not in exclude_keys]
+            stacked_tensor = torch.cat(tensors_to_stack, dim=1)
+            condition = stacked_tensor
+        elif self.model_config.data.condition_mode == 4:
+            condition = batch_dict['precip_masked']
+        elif self.model_config.data.condition_mode == 5:
+            exclude_keys = ['precip_gt', 'mask']
+            tensors_to_stack = [tensor for key, tensor in batch_dict.items() if key not in exclude_keys]
+            stacked_tensor = torch.cat(tensors_to_stack, dim=1)
+            condition = stacked_tensor
+        else:
+            raise AttributeError()
+        return condition, y
+
+    def _downscale_condition(self, condition: torch.Tensor) -> torch.Tensor:
+        """
+        WassDiff dataloader returns upsampled condition that matches the dim out expected output. This function
+        downscales the condition to the reduced size
+        """
+        return F.interpolate(condition, size=(self.noise_shape[-2], self.noise_shape[-1]), mode='bilinear')
+
+
 class CheckCorrector(LightningModule):
+    """Stage 1 pretrained model for the CorrectorGAN model"""
     def __init__(self, input_channels=15, cond_idx=0, real_idx=1, model_config: Dict = {}):
         super().__init__()
         self.cond_idx = cond_idx
@@ -408,18 +570,6 @@ class CheckCorrector(LightningModule):
         # return torch.mean(fss)
         return mse_sample
 
-    #         mse = torch.zeros(len(x_mask), device=self.device)
-    #         for sample in range(len(x_mask)):
-    #             y_out = self.fss_conv(y_mask[sample].unsqueeze(0).type(torch.half))/window_size
-    #             x_out = self.fss_conv(x_mask[sample, 0:1, :, :].unsqueeze(0).type(torch.half))/window_size
-    #             mse_sample = torch.mean(torch.square(x_out - y_out))
-    #             mse_ref = torch.mean(torch.square(x_out)) +  torch.mean(torch.square(y_out))
-    #             if mse_ref == 0:
-    #                 continue
-    #             fss_sample = 1 - (mse_sample / mse_ref)
-    #             mse[sample] = fss_sample
-
-    #         return torch.mean(mse)
 
     def _generate_condition(self, batch_dict: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         y = self.scaler(batch_dict['precip_gt'])  # .to(config.device))

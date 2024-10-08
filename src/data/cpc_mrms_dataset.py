@@ -215,7 +215,7 @@ class DailyAggregateRainfallDataset(Dataset):
             self.loc_bounds['lat_max'] < lat < self.loc_bounds['lat_min']
 
     """data loading methods"""
-
+    # @profile  # Decorator from line_profiler
     def __getitem__(self, item):
         date_ = self.precip_dates[item]
         cpc_lr = self.read_cpc_daily_aggregate(date_)
@@ -954,10 +954,10 @@ def debug_dataloader(cfg):
     """
     Checks run time
     """
-    batch_size = 12 # 12
-    cfg.data.num_workers = 12
+    batch_size = 6 # 12
+    cfg.data.num_workers = 6
     cfg.data.batch_size = batch_size
-    cfg.data.data_config.use_precomputed_cpc = True
+    # cfg.data.data_config.use_precomputed_cpc = True
     OmegaConf.set_struct(cfg, False)
 
     cfg.data.train_val_split = 0.8
