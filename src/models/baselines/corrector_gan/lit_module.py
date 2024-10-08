@@ -27,7 +27,7 @@ class CorrectorGan(LightningModule):
                  loss_hparams={'disc_loss': "wasserstein", 'gen_loss': "wasserstein", 'lambda_gp': 10},
                  val_hparams={'val_nens': 10, 'tp_log': 0.01, 'ds_max': 50, 'ds_min': 0},
                  model_config: Dict = {}, automatic_optimization: bool = False,
-                 use_gradient_clipping: bool = False, gen_ckpt: Optional[str] = None):  # fill in
+                 use_gradient_clipping: bool = False, gen_ckpt: Optional[str] = None, *args, **kwargs):  # fill in
         super().__init__()
 
         self.noise_shape = noise_shape
@@ -55,8 +55,11 @@ class CorrectorGan(LightningModule):
 
         # to be defined elsewhere
         self.rainfall_dataset = None
+        self.skip_next_batch = False  # flag to be modified by callbacks
+        self.scaler = None
+        self.inverse_scaler = None
 
-        self.save_hyperparameters()
+        self.save_hyperparameters(logger=False, ignore=("model_config", "optimizer_config"))
 
     def setup(self, stage: str) -> None:
         # resume from stage 2 (GAN high-res pre-training)
@@ -72,13 +75,12 @@ class CorrectorGan(LightningModule):
                 new_state_dict[new_key] = value
             self.gen.load_state_dict(new_state_dict)
 
-    def configure_optimizers(self):
-
         ### additional steps related to WassDiff dataset
         # Create data normalizer and its inverse
         self.scaler = datasets.get_data_scaler(self.model_config)
         self.inverse_scaler = datasets.get_data_inverse_scaler(self.model_config)
         #######
+    def configure_optimizers(self):
 
         if self.opt_hparams['gen_optimiser'] == 'adam':
             gen_opt = optim.Adam(self.gen.parameters(), eps=5e-5, lr=self.opt_hparams['gen_lr'],
@@ -166,13 +168,40 @@ class CorrectorGan(LightningModule):
 
         for i in range(self.val_hparams['val_nens']):
             noise = torch.randn(y.shape[0], * self.noise_shape[-3:], device=self.device)
-            pred, lr_corrected_pred = self.gen(x, noise)  # TODO: debug
+            pred, lr_corrected_pred = self.gen(x, noise)
             pred = pred.detach().to('cpu').numpy().squeeze()
             batch_dict['precip_output_' + str(i)] = torch.from_numpy(pred).unsqueeze(1)
 
         step_output = {"batch_dict": batch_dict, "condition": x}
         # TODO: calculate and report validation metrics
         return step_output
+
+    def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
+        if self.skip_next_batch:  # determine whether to skip this batch
+            return {}
+        batch_dict, batch_coords, xr_low_res_batch, valid_mask = batch  # discard coordinates FIXME
+        condition, gt = self._generate_condition(batch_dict)
+        condition = self._downscale_condition(condition)
+        # batch_size = condition.shape[0]
+
+        # ensemble prediction, if needed
+        if self.hparams.num_samples > 1 and condition.shape[0] > 1:
+            raise AttributeError('Ensemble prediction not supported for batch size > 1.')
+        elif self.hparams.num_samples > 1 and condition.shape[0] == 1:
+            condition = condition.repeat(self.hparams.num_samples, 1, 1, 1)
+
+        # if self.hparams.bypass_sampling:
+        #     batch_dict['precip_output'] = torch.zeros_like(gt)
+        # else:
+        noise = torch.randn(gt.shape[0], *self.noise_shape[-3:], device=self.device)
+        pred, lr_corrected_pred = self.gen(condition, noise)
+        if self.hparams.num_samples == 1:
+            batch_dict['precip_output'] = pred
+        else:
+            for i in range(self.hparams.num_samples):
+                batch_dict['precip_output_' + str(i)] = pred[i, :, :, :]
+        return {'batch_dict': batch_dict, 'batch_coords': batch_coords, 'xr_low_res_batch': xr_low_res_batch,
+                'valid_mask': valid_mask}
 
     def on_validation_batch_end(self, outputs: STEP_OUTPUT, batch: Any, batch_idx: int,
                                 dataloader_idx: int = 0) -> None:

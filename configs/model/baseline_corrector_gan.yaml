@@ -36,8 +36,7 @@ loss_hparams:
     gradient_penalty: 10.0
 
 val_hparams:
-#    val_nens: 10
-  val_nens: 1
+  val_nens: 1  # official: 10
 
 # additional params
 automatic_optimization: false
