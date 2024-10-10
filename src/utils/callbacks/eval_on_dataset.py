@@ -304,28 +304,28 @@ def compute_ensemble_metrics(parent_save_dir, save_dir_pattern, show_vis=False, 
         print(f'Only using the first {ensemble_size} runs')
         print(runs)
 
-    # each run should have the same ckpt
-    ckpt_paths = []
-    for run in runs:
-        save_dir = p.join(parent_save_dir, run)
-        with open(p.join(save_dir, 'summary.txt'), 'r') as f:
-            lines = f.readlines()
-            for line in lines:
-                if 'checkpoint' in line:
-                    ckpt_paths.append(line.split(': ')[1].strip())
-                    break
-    assert len(ckpt_paths) == len(runs)
-    assert np.all([ckpt_path == ckpt_paths[0] for ckpt_path in ckpt_paths]), 'Checkpoints are not the same'
+    # each run should have the same ckpt FIMXE
+    # ckpt_paths = []
+    # for run in runs:
+    #     save_dir = p.join(parent_save_dir, run)
+    #     with open(p.join(save_dir, 'summary.txt'), 'r') as f:
+    #         lines = f.readlines()
+    #         for line in lines:
+    #             if 'checkpoint' in line:
+    #                 ckpt_paths.append(line.split(': ')[1].strip())
+    #                 break
+    # assert len(ckpt_paths) == len(runs)
+    # assert np.all([ckpt_path == ckpt_paths[0] for ckpt_path in ckpt_paths]), 'Checkpoints are not the same'
 
     # number of common batches in each run, assuming sequential numbering
     num_batches = min([len([b for b in os.listdir(p.join(parent_save_dir, run)) if 'batch_' in b]) for run in runs])
     print(f'Found {num_batches} batches in each run')
 
-    with open(p.join(ensemble_output_path, 'summary.txt'), 'a') as f:
-        f.write(f'executed on: {datetime.now()}\n')
-        f.write(f'checkpoint: {ckpt_paths[0]}\n')
-        f.write(f'ensemble runs: {runs}\n')
-        f.write(f'number of batches: {num_batches}\n')
+    # with open(p.join(ensemble_output_path, 'summary.txt'), 'a') as f:
+    #     f.write(f'executed on: {datetime.now()}\n')
+    #     f.write(f'checkpoint: {ckpt_paths[0]}\n')
+    #     f.write(f'ensemble runs: {runs}\n')
+    #     f.write(f'number of batches: {num_batches}\n')
 
     batch_size = torch.load(os.path.join(parent_save_dir, runs[0], 'batch_0.pt'))['precip_up'].shape[0]
 

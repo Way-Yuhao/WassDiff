@@ -1,0 +1,12 @@
+python ./src/eval.py trainer=gpu trainer.devices=[5] experiment=eval_baseline_corrector_gan name=CorrectorGAN_epoch_699_2;
+python ./src/eval.py trainer=gpu trainer.devices=[5] experiment=eval_baseline_corrector_gan name=CorrectorGAN_epoch_699_3;
+python ./src/eval.py trainer=gpu trainer.devices=[5] experiment=eval_baseline_corrector_gan name=CorrectorGAN_epoch_699_4;
+python ./src/eval.py trainer=gpu trainer.devices=[5] experiment=eval_baseline_corrector_gan name=CorrectorGAN_epoch_699_5;
+python ./src/eval.py trainer=gpu trainer.devices=[5] experiment=eval_baseline_corrector_gan name=CorrectorGAN_epoch_699_6;
+python ./src/eval.py trainer=gpu trainer.devices=[5] experiment=eval_baseline_corrector_gan name=CorrectorGAN_epoch_699_7;
+python ./src/eval.py trainer=gpu trainer.devices=[5] experiment=eval_baseline_corrector_gan name=CorrectorGAN_epoch_699_8;
+python ./src/eval.py trainer=gpu trainer.devices=[5] experiment=eval_baseline_corrector_gan name=CorrectorGAN_epoch_699_9;
+python ./src/eval.py trainer=gpu trainer.devices=[5] experiment=eval_baseline_corrector_gan name=CorrectorGAN_epoch_699_10;
+python ./src/eval.py trainer=gpu trainer.devices=[5] experiment=eval_baseline_corrector_gan name=CorrectorGAN_epoch_699_11;
+python ./src/eval.py trainer=gpu trainer.devices=[5] experiment=eval_baseline_corrector_gan name=CorrectorGAN_epoch_699_12;
+python ./src/eval.py trainer=gpu trainer.devices=[5] experiment=eval_baseline_corrector_gan name=CorrectorGAN_epoch_699_13;
