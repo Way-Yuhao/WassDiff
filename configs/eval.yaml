@@ -5,9 +5,9 @@ defaults:
   - model: wassdiff
   - metrics: default
 #  - callbacks: specified_eval
-  - callbacks: eval_on_dataset
+#  - callbacks: eval_on_dataset
   - logger: null
-  - trainer: default
+  - trainer: gpu
   - paths: default
   - extras: default
   - hydra: default
@@ -21,6 +21,8 @@ task_name: "eval"
 
 tags: ["dev"]
 
+ckpt_path: null
+name: null
 
 #### passing checkpoint path is necessary for evaluation
 ## WassDiff
@@ -32,12 +34,13 @@ tags: ["dev"]
 #ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-23_13-17-17/checkpoints/epoch_1172.ckpt
 #ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-30_14-16-02/checkpoints/epoch_499_copy.ckpt
 #ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-10-02_13-40-41/checkpoints/epoch_294_step_1101.ckpt
-#ckpt_path: null
 
-#model:
-#  num_samples: 1
-#  compile: true  # for speed up
-#  display_sampling_pbar: false  # debug
+
+# WassDiff
+model:
+  num_samples: 1
+  compile: true  # for speed up
+  display_sampling_pbar: false  # debug
 #  pytorch_ckpt_path: ${local.model_root_dir}/NCSNPP/wandb/run-20240503_110757-gvq9r51l/checkpoints/checkpoint_21.pth
 
 
@@ -57,21 +60,4 @@ tags: ["dev"]
 #paths:
 #  output_dir: ${local.specified_eval_root_dir}/${name}
 #  log_dir: ${paths.output_dir}
-
-
-#### EVAL SET ########
-#name: # WassDiff_LiT_trained_det_eval_mb_step_1101_reproduce
-data:
-  dataloader_mode: eval_set_deterministic
-  use_test_samples_from: ${paths.data_dir}/rainfall_eval/50_eval_samples_2
-  stop_at_batch: 26
-  data_config:
-    image_size: 512
-#callbacks:
-#  eval_on_dataset:
-#    eval_only_on_existing: true
-paths:
-  output_dir:  ${local.eval_set_root_dir}/${name}
-  log_dir: ${paths.output_dir}
-
 
