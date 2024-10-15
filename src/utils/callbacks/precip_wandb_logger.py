@@ -81,6 +81,10 @@ class PrecipDataLogger(Callback):
             self._log_score(pl_module, outputs)
 
     @rank_zero_only
+    def on_train_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        self.save_last_ckpt(trainer)
+
+    @rank_zero_only
     def on_validation_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
                                 batch: Any, batch_idx: int, dataloader_idx: int = 0) -> None:
         if self._check_frequency(trainer, 'img'):
@@ -252,6 +256,12 @@ class PrecipDataLogger(Callback):
                 wandb.run.log_artifact(artifact, aliases=[f'epoch_{trainer.current_epoch:03d}',
                                                           f'step_{wandb.run.step:03d}'])
         return
+
+    def save_last_ckpt(self, trainer: Trainer):
+        if self.enable_save_ckpt:
+            save_dir = trainer.logger.save_dir
+            ckpt_path = os.path.join(save_dir, 'checkpoints', 'last.ckpt')
+            trainer.save_checkpoint(ckpt_path)
 
     @staticmethod
     def remove_image_file_from_summary():
