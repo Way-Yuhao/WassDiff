@@ -19,6 +19,7 @@ from scipy.stats.mstats import winsorize
 import ast
 from src.utils.callbacks.eval_on_dataset import compute_ensemble_metrics
 from src.utils.plot_func import filter_sample_logic, build_histogram_for_sample, build_power_spectral_for_sample
+from src.utils.helper import yprint
 
 """
 META ANALYSIS PLOTS
@@ -499,6 +500,62 @@ def build_hist_for_all_methods(ensemble_size: int, graph_to_build: str):
         plt.show()
         plt.close()
 
+def plot_additional_vis():
+    output_dir = '/home/yl241/data/rainfall_eval_LiT/general/vis_with_cgan/'
+    ours_dir = '/home/yl241/data/rainfall_eval/logp1_emd_ckpt21'
+    ours_minus_dir = '/home/yl241/data/rainfall_eval/sbdm_r'
+    cnn_dir = '/home/yl241/data/rainfall_eval/cnn_baseline_r21ckpt'
+    cgan_dir = '/home/yl241/data/rainfall_eval_LiT/CorrectorGAN_epoch_699'
+    yprint('Plotting additional visualizations')
+    num_batches = 25
+    batch_size = 12
+    for i in tqdm(range(num_batches)):
+        for j in range(batch_size):
+            ours_batch = torch.load(p.join(ours_dir, f'batch_{i}.pt'))
+            ours_minus_batch = torch.load(p.join(ours_minus_dir, f'batch_{i}.pt'))
+            cnn_batch = torch.load(p.join(cnn_dir, f'batch_{i}.pt'))
+            cgan_batch = torch.load(p.join(cgan_dir, f'batch_{i}.pt'))
+
+            ours = ours_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            ours_minus = ours_minus_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            cnn = cnn_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            cpc_inter = ours_batch['precip_up'][j][0, :, :].cpu().detach().numpy()
+            cgan = cgan_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            gt = ours_batch['precip_gt'][j][0, :, :].cpu().detach().numpy()
+
+            if gt.max() > 0:
+                # 99 percentile of gt
+                vmax_ = np.percentile(gt, 99.9)
+                # vmax_ = gt.max()
+                vmin_ = 0
+            else:
+                vmax_ = max(cpc_inter.max(), ours.max(), gt.max())
+                vmin_ = min(cpc_inter.min(), ours.min(), gt.min())
+            # plot in the order of cpc_inter, cnn, ours-, ours
+            fig, axes = plt.subplots(1, 6, figsize=(22, 5))
+            im1 = axes[0].imshow(cpc_inter, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            # axes[0].set_title('CPC Interpolation')
+            im2 = axes[1].imshow(cnn, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            # axes[1].set_title('CNN')
+            im3 = axes[2].imshow(cgan, cmap='viridis', vmin=vmin_, vmax=vmax_)
+
+            im4 = axes[3].imshow(ours_minus, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            # axes[2].set_title('Ours-')
+            im5 = axes[4].imshow(ours, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            # axes[3].set_title('Ours')
+            im6 = axes[5].imshow(gt, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            # axes[4].set_title('MRMS')
+            cbar = fig.colorbar(im5, ax=axes, shrink=0.6, pad=0.01)
+            cbar.set_label("Precipitation (mm/day)")
+            for ax in axes:
+                ax.axis('off')
+
+            # add colorbar at the right of the last image, applies to all images
+            plt.savefig(p.join(output_dir, f'batch_{i}_sample_{j}.png'))
+            # plt.show()
+            plt.close()
+            # return
+
 def main():
     # plot_qq_ensemble(16, '/home/yl241/workspace/NCSN/plt/qq')
     # dist_output_specific_sample()
@@ -508,8 +565,10 @@ def main():
     # skill_vs_ensemble_size()
 
     # hist and spectra
-    build_hist_for_all_methods(ensemble_size=13, graph_to_build='hist')
-    build_hist_for_all_methods(ensemble_size=13, graph_to_build='spectra')
+    # build_hist_for_all_methods(ensemble_size=13, graph_to_build='hist')
+    # build_hist_for_all_methods(ensemble_size=13, graph_to_build='spectra')
+
+    plot_additional_vis()
 
 if __name__ == '__main__':
     main()

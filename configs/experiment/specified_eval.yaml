@@ -1,11 +1,11 @@
 # @package _global_
 
 defaults:
-  - override /callbacks: specified_eval
+  - /callbacks: specified_eval
   - _self_
 
 #### SPECIFY EVAL MODE ####
-name: debug_predefined_events_cold
+name: debug_predefined_events_cold_debug
 event_name: cold_front
 data:
   dataloader_mode: specify_eval
