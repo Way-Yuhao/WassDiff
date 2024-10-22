@@ -118,7 +118,7 @@ class EvalOnDataset(Callback):
                 self.report_via_slack(trainer, title=f'Preliminary test results with {batch_idx + 1} batches',
                                       content=df_to_markdown_table(summary_stats))
         if self.show_vis:
-            print('Visualizing...')
+            # print('Visualizing...')
             batch_size = batch_dict['precip_gt'].shape[0]
             for i in range(batch_size):
                 cpc_inter = inverse_norm_batch_dict['precip_up'][i][0, :, :]
