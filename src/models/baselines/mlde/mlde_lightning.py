@@ -128,8 +128,7 @@ class MLDELitModule(LightningModule):
         # Building sampling functions
         sampling_shape = (self.model_config.sampling.sampling_batch_size, self.model_config.data.num_channels,
                           self.model_config.data.image_size, self.model_config.data.image_size)
-        self.sampling_fn = sampling.get_sampling_fn(self.model_config, sde, sampling_shape, self.inverse_scaler,
-                                                    sampling_eps)
+        self.sampling_fn = sampling.get_sampling_fn(self.model_config, sde, sampling_shape, sampling_eps)
         # s = self.model_config.sampling.sampling_batch_size
         # num_train_steps = self.model_config.training.n_iters
 
@@ -199,15 +198,10 @@ class MLDELitModule(LightningModule):
         batch_dict, _ = batch  # discard coordinates
         condition, gt = self._generate_condition(batch_dict)
         condition, context_mask = self._dropout_condition(condition)
-        loss, loss_dict = self.train_step_fn(self.state, gt, condition)
+        loss = self.train_step_fn(self.state, gt, condition)
 
         self.log("train/loss", loss, on_step=True, on_epoch=False, prog_bar=False, batch_size=condition.shape[0])
-        if self.use_emd:
-            self.log("train/emd_loss", loss_dict['emd_loss'], on_step=True, on_epoch=False, prog_bar=False,
-                     batch_size=condition.shape[0])
-            self.log("train/score_loss", loss_dict['score_loss'], on_step=True, on_epoch=False, prog_bar=False,
-                     batch_size=condition.shape[0])
-        step_output = {"batch_dict": batch_dict, "loss_dict": loss_dict, 'condition': condition,
+        step_output = {"batch_dict": batch_dict, 'condition': condition,
                        'context_mask': context_mask}
         return step_output
 
@@ -220,7 +214,7 @@ class MLDELitModule(LightningModule):
         """
         batch_dict, _ = batch  # discard coordinates
         condition, gt = self._generate_condition(batch_dict)
-        eval_loss, _ = self.eval_step_fn(self.state, gt, condition)
+        eval_loss = self.eval_step_fn(self.state, gt, condition)
         self.log("val/loss", eval_loss, on_step=False, on_epoch=True, prog_bar=False,
                  batch_size=condition.shape[0], sync_dist=True)
         step_output = {"batch_dict": batch_dict, "condition": condition}
@@ -276,10 +270,9 @@ class MLDELitModule(LightningModule):
         This is only intended to use during validation to gather quick samples.
         Usage at test time is not recommended.
         """
-        config = self.model_config
-        sampling_null_condition = self.sampling_null_condition
-        sample, n = self.sampling_fn(self.net, condition=condition, w=config.model.w_guide,
-                                     null_condition=sampling_null_condition)
+        # config = self.model_config
+        # sampling_null_condition = self.sampling_null_condition
+        sample, n = self.sampling_fn(self.net, condition)
         return sample
     def _generate_null_condition(self):
         # generate null condition for sampling

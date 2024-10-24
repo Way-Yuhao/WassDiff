@@ -31,7 +31,7 @@ from src.models.baselines.mlde.utils import from_flattened_numpy, to_flattened_n
 from scipy import integrate
 from . import sde_lib
 # from .models import utils as mutils
-from src.utils.mlde_utils import utils as mutils
+from src.models.baselines.mlde import utils as mutils
 
 _CORRECTORS = {}
 _PREDICTORS = {}

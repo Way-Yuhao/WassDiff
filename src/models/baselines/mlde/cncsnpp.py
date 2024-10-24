@@ -257,6 +257,9 @@ class cNCSNpp(nn.Module):
     #   # If input data is in [0, 1]
     #   x = 2 * x - 1.
 
+    # line below is modified
+    x = x.type(torch.float32)
+
     # combine the modelled data and the conditioning inputs
     x = torch.cat([x, cond], dim=1)
     # timestep/noise_level embedding; only for continuous training
@@ -295,7 +298,7 @@ class cNCSNpp(nn.Module):
     for i_level in range(self.num_resolutions):
       # Residual blocks for this resolution
       for i_block in range(self.num_res_blocks):
-        h = modules[m_idx](hs[-1], temb)
+        h = modules[m_idx](hs[-1], temb)  # FIXME: error at i_leve 3 i_block 1
         m_idx += 1
         if h.shape[-1] in self.attn_resolutions:
           h = modules[m_idx](h)
