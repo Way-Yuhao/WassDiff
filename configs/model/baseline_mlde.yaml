@@ -47,7 +47,7 @@ model_config:
     embedding_type: 'positional'
     fourier_scale: 16  # Fourier embedding scale
     conv_size: 3  # Convolution size
-    ema_rate: 0.999  # Exponential moving average rate
+    ema_rate: 0.9999  # MLDE
     scale_by_sigma: True  # Scale by sigma during sampling
     drop_prob: 0.1  # Drop probability for CIFAR10
     w_guide: 0
@@ -71,8 +71,8 @@ model_config:
     snapshot_sampling: False
     likelihood_weighting: False
     continuous: True
-    reduce_mean: False
-    sde: 'vesde'
+    reduce_mean: True # MLDE
+    sde: 'subvpsde'
     task: 'super_resolution'
     use_emd: false  # Placeholder for EMD usage
     emd_weight: 0  # Weight for EMD loss
@@ -83,8 +83,8 @@ model_config:
     probability_flow: False
     snr: 0.16
     method: 'pc'  # Predictor-corrector method
-    predictor: 'reverse_diffusion'
-    corrector: 'langevin'
+    predictor: 'euler_maruyama'
+    corrector: 'none'
     sampling_batch_size: 12  # WassDiff
 
 #evaluation:

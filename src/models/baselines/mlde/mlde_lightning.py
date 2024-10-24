@@ -2,24 +2,26 @@ from typing import Any, Dict, Tuple, Optional
 # import wandb
 import torch
 from lightning import LightningModule
-from torchmetrics import MaxMetric, MeanMetric
-from torchmetrics.classification.accuracy import Accuracy
 # from src.models.ncsn import ncsnpp_cond
-from src.models.ncsn.ema import ExponentialMovingAverage
-from src.utils.ncsn_utils import sde_lib
-from src.utils.ncsn_utils import losses
-# from src.utils.mlde_utils import losses
-import src.utils.ncsn_utils.sampling as sampling
-from src.models.ncsn import utils as mutils
-from src.utils.ncsn_utils import datasets as datasets
+from src.models.baselines.mlde import cncsnpp
+# from src.models.ncsn.ema import ExponentialMovingAverage
+from src.models.baselines.mlde.ema import ExponentialMovingAverage
+# from src.utils.ncsn_utils import sde_lib
+from src.utils.mlde_utils import sde_lib
+# from src.utils.ncsn_utils import losses
+from src.utils.mlde_utils import losses
+# import src.utils.ncsn_utils.sampling as sampling
+from src.utils.mlde_utils import sampling
+# from src.models.ncsn import utils as mutils
+from src.models.baselines.mlde import utils as mutils
+from src.utils.ncsn_utils import datasets as datasets  # using NCSN
 # sampling
-from src.utils.ncsn_utils.sampling import ReverseDiffusionPredictor, LangevinCorrector
-import src.utils.ncsn_utils.controllable_generation as controllable_generation
-from src.utils.ncsn_utils.utils import restore_checkpoint
-from src.utils.ncsn_utils.losses import get_optimizer
+# from src.utils.ncsn_utils.sampling import ReverseDiffusionPredictor, LangevinCorrector
+# import src.utils.ncsn_utils.controllable_generation as controllable_generation
+# from src.utils.ncsn_utils.utils import restore_checkpoint
+# from src.utils.ncsn_utils.losses import get_optimizer
 from src.utils.helper import yprint
 # mlde
-from src.models.baselines.mlde.cncsnpp import cNCSNpp
 from src.models.baselines.mlde.location_params import LocationParams
 
 class MLDELitModule(LightningModule):
@@ -117,17 +119,11 @@ class MLDELitModule(LightningModule):
         emd_weight = self.model_config.training.emd_weight
         self.train_step_fn = losses.get_step_fn(sde, train=True, optimize_fn=optimize_fn,
                                                 reduce_mean=reduce_mean, continuous=continuous,
-                                                likelihood_weighting=likelihood_weighting,
-                                                use_emd=self.use_emd, emd_weight=emd_weight,
-                                                compute_rescaled_emd=self.model_config.training.compute_rescaled_emd,
-                                                emd_rescale_c=self.model_config.data.precip_rescale_c)
+                                                likelihood_weighting=likelihood_weighting)
 
         self.eval_step_fn = losses.get_step_fn(sde, train=False, optimize_fn=optimize_fn,
                                                reduce_mean=reduce_mean, continuous=continuous,
-                                               likelihood_weighting=likelihood_weighting,
-                                               use_emd=self.use_emd, emd_weight=emd_weight,
-                                               compute_rescaled_emd=self.model_config.training.compute_rescaled_emd,
-                                               emd_rescale_c=self.model_config.data.precip_rescale_c)
+                                               likelihood_weighting=likelihood_weighting)
 
         # Building sampling functions
         sampling_shape = (self.model_config.sampling.sampling_batch_size, self.model_config.data.num_channels,
