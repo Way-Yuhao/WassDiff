@@ -59,7 +59,7 @@ model_config:
     condition_mode: ${data.data_config.condition_mode}
     num_channels: ${data.data_config.num_channels}
     num_context_chs: ${data.data_config.num_context_chs}
-#    condition_size: ${data.data_config.condition_size}
+    condition_size: ${data.data_config.condition_size}  # only for logging?
     centered: ${data.data_config.centered} # WassDiff; should be False
     precip_rescale_c: ${data.data_config.precip_rescale_c}
     # MLDE specific
