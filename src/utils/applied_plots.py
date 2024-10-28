@@ -556,6 +556,9 @@ def plot_additional_vis():
             plt.close()
             # return
 
+def sample_bias_during_training():
+    df = pd.read_csv('/home/yl241/data/rainfall_eval_LiT/general/summary_stats_all_members.csv')
+
 def main():
     # plot_qq_ensemble(16, '/home/yl241/workspace/NCSN/plt/qq')
     # dist_output_specific_sample()
@@ -568,7 +571,7 @@ def main():
     # build_hist_for_all_methods(ensemble_size=13, graph_to_build='hist')
     # build_hist_for_all_methods(ensemble_size=13, graph_to_build='spectra')
 
-    plot_additional_vis()
-
+    # plot_additional_vis()
+    sample_bias_during_training()
 if __name__ == '__main__':
     main()
