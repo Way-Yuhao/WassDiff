@@ -1,6 +1,5 @@
 from typing import Any, Dict, Tuple, Optional
 # import wandb
-import itertools
 import torch
 from lightning import LightningModule
 # from src.models.ncsn import ncsnpp_cond
@@ -52,7 +51,6 @@ class MLDELitModule(LightningModule):
         self.eval_step_fn = None
         self.sampling_fn = None  # sampling function used during training (for displaying conditional samples)
         self.pc_upsampler = None  # sampling function used during inference (Predictor-Corrector upsampler)
-        self.location_params = None
 
         # internal flags
         self.automatic_optimization = False
@@ -74,9 +72,6 @@ class MLDELitModule(LightningModule):
         if self.hparams.compile and stage == "fit":
             self.net = torch.compile(self.net)
 
-        self.location_params = LocationParams(n_channels=self.model_config.model.loc_spec_channels,
-                                              size=self.model_config.data.image_size)
-
     def configure_optimizers(self) -> Dict[str, Any]:
         """Choose what optimizers and learning-rate schedulers to use in your optimization.
         Normally you'd need one. But in the case of GANs or similar you might have multiple.
@@ -92,12 +87,10 @@ class MLDELitModule(LightningModule):
         self.scaler = datasets.get_data_scaler(self.model_config)
         self.inverse_scaler = datasets.get_data_inverse_scaler(self.model_config)
 
-        optimizer = losses.get_optimizer(self.optimizer_config, itertools.chain(self.net.parameters(),
-                                                                                self.location_params.parameters()))
+        optimizer = losses.get_optimizer(self.optimizer_config, self.net.parameters())
 
-        ema = ExponentialMovingAverage(itertools.chain(self.net.parameters(), self.location_params.parameters()),
-                                       decay=self.model_config.model.ema_rate)
-        self.state = dict(optimizer=optimizer, location_params=self.location_params, model=self.net, ema=ema, step=0)
+        ema = ExponentialMovingAverage(self.net.parameters(), decay=self.model_config.model.ema_rate)
+        self.state = dict(optimizer=optimizer, model=self.net, ema=ema, step=0)
 
         # Setup SDEs
         if self.model_config.training.sde.lower() == 'vpsde':
