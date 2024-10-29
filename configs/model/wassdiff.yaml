@@ -19,8 +19,13 @@ optimizer_config:
     warmup: 5000
     grad_clip: 1.0
 
-#scheduler:
+tiled_config:
+  pch_size: 256
+  stride: 192
+  sf: 1
 
+
+#scheduler:
 model_config:
   model:
     name: 'ncsnpp_cond'

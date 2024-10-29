@@ -14,15 +14,18 @@ class ImageSpliterTh:
         self.sf = sf
 
         bs, chn, height, width= im.shape
+        self.chn = 1
         self.height_starts_list = self.extract_starts(height)
         self.width_starts_list = self.extract_starts(width)
         self.length = self.__len__()
         self.num_pchs = 0
 
         self.im_ori = im
-        self.im_res = torch.zeros([bs, chn, height*sf, width*sf], dtype=im.dtype, device=im.device)
+        self.im_res = torch.zeros([bs, self.chn, height * self.sf, width * self.sf], dtype=im.dtype, device=im.device)
         self.pixel_count = torch.zeros([bs, chn, height*sf, width*sf], dtype=im.dtype, device=im.device)
         self.weight = self._gaussian_weights(pch_size, pch_size, bs, im.device)
+        print(f"self.im_res shape: {self.im_res.shape}")
+        print(f"self.weight shape: {self.weight.shape}")
 
     def extract_starts(self, length):
         if length <= self.pch_size:
@@ -82,7 +85,9 @@ class ImageSpliterTh:
         y_probs = [exp(-(y-midpoint)*(y-midpoint)/(latent_height*latent_height)/(2*var)) / sqrt(2*pi*var) for y in range(latent_height)]
 
         weights = np.outer(y_probs, x_probs)
-        return torch.tile(torch.tensor(weights, device=device), (nbatches, 3, 1, 1))
+        weights_tensor = torch.tensor(weights, device=device).unsqueeze(0).unsqueeze(0)  # Shape: (1, 1, tile_height, tile_width)
+        weights_tensor = weights_tensor.repeat(nbatches, self.chn, 1,1)  # Shape: (nbatches, chn, tile_height, tile_width)
+        return weights_tensor
 
     def update(self, pch_res, index_infos):
         '''

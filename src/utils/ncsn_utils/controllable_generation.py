@@ -338,7 +338,7 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
             if display_pbar:
                 for i in track(range(sde.N), description=f'Sampling {sde.N} steps....', refresh_per_second=1):
                     t = timesteps[i]
-                    x, x_mean = corrector_upsample_update_fn(model, x=x, t=t, c=condition, w=w, null_cond=null_condition)
+                    x, x_mean = corrector_upsample_update_fn(model, x=x, t=t, c=condition, w=w, null_cond=null_condition) #this is the step that's not correct
                     x, x_mean = projector_upsample_update_fn(model, x=x, t=t, c=condition, w=w, null_cond=null_condition)
 
                     # if i in show_vis_at_steps:  # show diffusion progression

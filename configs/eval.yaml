@@ -42,7 +42,7 @@ data:
   dataloader_mode: specify_eval
   batch_size: 1  # DO NOT MODIFY
   data_config:
-    image_size: 256 # 512
+    image_size: 1024 # 521
   specify_eval_targets: ${data.known_eval_targets.${event_name}}
 #  specify_eval_targets:
 #    - date: '20150618'
