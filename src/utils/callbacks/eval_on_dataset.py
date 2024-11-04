@@ -17,7 +17,7 @@ import lpips
 from tabulate import tabulate
 from src.utils.helper import yprint, monitor_complete, move_batch_to_cpu, alert
 from src.utils.metrics import calc_mae, calc_mse, calc_rmse, calc_pcc, calc_csi, calc_bias, calc_fss, calc_emd, \
-    calc_hrre, calc_mppe, calc_lpips, calc_crps
+    calc_hrre, calc_mppe, calc_lpips, calc_crps, calc_ssim
 
 
 class EvalOnDataset(Callback):
@@ -199,7 +199,7 @@ class EvalOnDataset(Callback):
                 row['mse'] = calc_mse(output, gt, valid_mask, k=k, pooling_func=pooling_func)
                 row['rmse'] = calc_rmse(output, gt, valid_mask, k=k, pooling_func=pooling_func)
                 row['pcc'] = calc_pcc(output, gt, valid_mask, k=k, pooling_func=pooling_func)
-                # row['ssim'] = calc_ssim(output, gt)
+                row['ssim'] = calc_ssim(output, gt)
                 row['csi'] = calc_csi(output, gt, threshold=10, valid_mask=valid_mask, k=k, pooling_func=pooling_func)
                 row['csi_p16'] = calc_csi(output, gt, threshold=10, valid_mask=valid_mask, k=16,
                                           pooling_func=pooling_func)

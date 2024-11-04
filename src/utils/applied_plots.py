@@ -557,7 +557,32 @@ def plot_additional_vis():
             # return
 
 def sample_bias_during_training():
-    df = pd.read_csv('/home/yl241/data/rainfall_eval_LiT/general/summary_stats_all_members.csv')
+    # Read and preprocess df1
+    df1 = pd.read_csv('/home/yl241/data/rainfall_eval_LiT/general/sbdm_sample_bias.csv')
+    df1 = df1.rename(columns={'Ablation WDR - val/sample_bias': 'sample_bias'})
+    df1 = df1[['Step', 'sample_bias']]
+    df1['Method'] = 'SBDM'  # Add method name column
+
+    # Read and preprocess df2
+    df2 = pd.read_csv('/home/yl241/data/rainfall_eval_LiT/general/wassdiff_sample_bias.csv')
+    df2 = df2.rename(columns={'WassDiff det val - val/sample_bias': 'sample_bias'})
+    df2 = df2[['Step', 'sample_bias']]
+    df2['Method'] = 'WassDiff'  # Add method name column
+
+    # Concatenate the DataFrames
+    df = pd.concat([df1, df2], ignore_index=True)
+
+    # Plot using Seaborn
+    sns.lineplot(data=df, x='Step', y='sample_bias', hue='Method')
+
+    # Optional: Add labels and title
+    plt.xlabel('Step')
+    plt.ylim([0, 200])
+    plt.ylabel('Sample Bias')
+    plt.title('Sample Bias over Steps for Different Methods')
+
+    # Display the plot
+    plt.show()
 
 def main():
     # plot_qq_ensemble(16, '/home/yl241/workspace/NCSN/plt/qq')
