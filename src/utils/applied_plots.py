@@ -554,7 +554,76 @@ def plot_additional_vis():
             plt.savefig(p.join(output_dir, f'batch_{i}_sample_{j}.png'))
             # plt.show()
             plt.close()
-            # return
+
+def plot_additional_vis_era5_ablation():
+    output_dir = '/home/yl241/data/rainfall_eval_LiT/general/vis_ablation/'
+    ours_dir = '/home/yl241/data/rainfall_eval/logp1_emd_ckpt21'
+    data_root_dir = '/home/yl241/data/rainfall_eval_LiT'
+    precip_only_dir = os.path.join(data_root_dir, 'WassDiff_ablation_precip_only')
+    no_precip_dir = os.path.join(data_root_dir, 'WassDiff_ablation_no_precip_up')
+    no_density_dir = os.path.join(data_root_dir, 'WassDiff_ablation_density')
+    no_surf_temp_dir = os.path.join(data_root_dir, 'WassDiff_ablation_surf_temp')
+    no_elevation_dir = os.path.join(data_root_dir, 'WassDiff_ablation_elevation')
+    no_wind_dir = os.path.join(data_root_dir, 'WassDiff_ablation_no_wind_u_v')
+    no_vflux_dir = os.path.join(data_root_dir, 'WassDiff_ablation_vlux_e_n')
+
+    yprint('Plotting additional visualizations')
+    num_batches = 25
+    batch_size = 12
+    for i in tqdm(range(num_batches)):
+        for j in range(batch_size):
+
+            ours_batch = torch.load(p.join(ours_dir, f'batch_{i}.pt'))
+            precip_only_batch = torch.load(p.join(precip_only_dir, f'batch_{i}.pt'))
+            no_precip_batch = torch.load(p.join(no_precip_dir, f'batch_{i}.pt'))
+            no_density_batch = torch.load(p.join(no_density_dir, f'batch_{i}.pt'))
+            no_surf_temp_batch = torch.load(p.join(no_surf_temp_dir, f'batch_{i}.pt'))
+            no_elevation_batch = torch.load(p.join(no_elevation_dir, f'batch_{i}.pt'))
+            no_wind_batch = torch.load(p.join(no_wind_dir, f'batch_{i}.pt'))
+            no_vflux_batch = torch.load(p.join(no_vflux_dir, f'batch_{i}.pt'))
+
+            ours = ours_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            cpc_inter = ours_batch['precip_up'][j][0, :, :].cpu().detach().numpy()
+            precip_only = precip_only_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            no_precip = no_precip_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            no_density = no_density_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            no_surf_temp = no_surf_temp_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            no_elevation = no_elevation_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            no_wind = no_wind_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            no_vflux = no_vflux_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            gt = ours_batch['precip_gt'][j][0, :, :].cpu().detach().numpy()
+
+            if gt.max() > 0:
+                # 99 percentile of gt
+                vmax_ = np.percentile(gt, 99.9)
+                # vmax_ = gt.max()
+                vmin_ = 0
+            else:
+                vmax_ = max(cpc_inter.max(), ours.max(), gt.max())
+                vmin_ = min(cpc_inter.min(), ours.min(), gt.min())
+            # plot in the order of cpc_inter, cnn, ours-, ours
+            fig, axes = plt.subplots(1, 10, figsize=(14, 3))
+            # im1 = axes[0].imshow(cpc_inter, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im2 = axes[1].imshow(no_precip, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im3 = axes[2].imshow(precip_only, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im4 = axes[3].imshow(no_density, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im5 = axes[4].imshow(no_surf_temp, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im6 = axes[5].imshow(no_elevation, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im7 = axes[6].imshow(no_wind, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im8 = axes[7].imshow(no_vflux, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im9 = axes[8].imshow(ours, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im10 = axes[9].imshow(gt, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            cbar = fig.colorbar(im9, ax=axes, shrink=0.31, pad=0.01)
+            cbar.set_label("Precipitation\n(mm/day)", fontsize=9)
+            cbar.ax.tick_params(labelsize=6)
+            for ax in axes:
+                ax.axis('off')
+            # add colorbar at the right of the last image, applies to all images
+            plt.savefig(p.join(output_dir, f'batch_{i}_sample_{j}.pdf'),
+                        bbox_inches='tight', dpi=600)
+            # plt.show()
+            plt.close()
+
 
 def sample_bias_during_training():
     # Read and preprocess df1
@@ -597,6 +666,7 @@ def main():
     # build_hist_for_all_methods(ensemble_size=13, graph_to_build='spectra')
 
     # plot_additional_vis()
-    sample_bias_during_training()
+    plot_additional_vis_era5_ablation()
+    # sample_bias_during_training()
 if __name__ == '__main__':
     main()
