@@ -63,9 +63,11 @@ Quantitative evaluation can be done by running
 ```python
 python src/eval.py trainer=gpu model=wassdiff experiment=eval_val_set ckpt_path=PATH_TO_MODEL_WEIGHTS name=NAME_OF_DIRECTORY
 ```
+
 Set ckpt_path to the path of the model weights you want to evaluate, and name to the name of the directory 
 where the evaluation results will be stored.
 Note that the evaluation results will be stored in `eval_set_root_dir` specified in `configs/local/default.yaml`.
+
 ----------
 
 To generate sample (single or ensemble) on a specified region and date (requires input data to be downloaded), run
@@ -74,6 +76,7 @@ To generate sample (single or ensemble) on a specified region and date (requires
 python src/eval.py trainer=gpu model=wassdiff experiment=specified_eval
  ckpt_path=PATH_TO_MODEL_WEIGHTS name=NAME_OF_DIRECTORY
 ```
+
 Set ckpt_path to the path of the model weights you want to evaluate, and name to the name of the directory 
 where the evaluation results will be stored.
 Note that the evaluation results will be stored in `specified_eval_root_dir` specified in `configs/local/default.yaml`.
@@ -81,5 +84,3 @@ Note that the evaluation results will be stored in `specified_eval_root_dir` spe
 To adjust ensemble size, append `model.num_samples=ENSEMBLE_SIZE` to command above.
 You may modify the `lon`, `lat`, and `date` parameters in `configs/experiment/specified_eval.yaml` 
 to specify the region and date of interest.
-
-[//]: # (run `python specify_eval.py`, and adjust `lon`, `lat`, and `date` parameters accordingly.)
