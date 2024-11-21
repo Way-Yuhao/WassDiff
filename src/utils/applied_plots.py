@@ -379,17 +379,19 @@ def build_hist_for_all_methods(ensemble_size: int, graph_to_build: str):
         'Ours': '/home/yl241/data/rainfall_eval/logp1_emd_ckpt21',
         # 'Ours-': '/home/yl241/data/rainfall_eval/logp1_ckpt22',
         'Ours-': '/home/yl241/data/rainfall_eval/sbdm_r',
-        'CNN': '/home/yl241/data/rainfall_eval/cnn_baseline_r21ckpt'
+        'CNN': '/home/yl241/data/rainfall_eval/cnn_baseline_r21ckpt',
+        'CGAN': '/home/yl241/data/rainfall_eval_LiT/CorrectorGAN_epoch_699'
     }
     label_colors = {
         'Ours': 'tab:blue',
         'Ours-': 'tab:purple',
         'CNN': 'tab:green',
         'CPC_Int': 'tab:orange',
-        'Ground Truth': 'black'
+        'Ground Truth': 'black',
+        'CGAN': 'tab:red'
     }
 
-    ig, ax = plt.subplots(figsize=(8, 5))
+    ig, ax = plt.subplots(figsize=(8, 4.5))
     for method, method_dir in all_methods.items():
         hist_total = None
         spectra_total = None
@@ -485,6 +487,7 @@ def build_hist_for_all_methods(ensemble_size: int, graph_to_build: str):
         # ax.set_title('Histograms')
         # ax.legend()
         sns.despine()
+        plt.tight_layout()
         plt.savefig(p.join(out_dir, 'histograms_r.pdf'))
         plt.show()
         plt.close()
@@ -495,6 +498,7 @@ def build_hist_for_all_methods(ensemble_size: int, graph_to_build: str):
         ax.set_yscale('log')  # Set log scale for y-axis
         # ax.set_title('Power Spectra')
         # ax.legend()
+        plt.tight_layout()
         sns.despine()
         plt.savefig(p.join(out_dir, 'spectra_r.pdf'))
         plt.show()
@@ -506,10 +510,9 @@ def plot_additional_vis():
     ours_minus_dir = '/home/yl241/data/rainfall_eval/sbdm_r'
     cnn_dir = '/home/yl241/data/rainfall_eval/cnn_baseline_r21ckpt'
     cgan_dir = '/home/yl241/data/rainfall_eval_LiT/CorrectorGAN_epoch_699'
-    yprint('Plotting additional visualizations')
     num_batches = 25
     batch_size = 12
-    for i in tqdm(range(num_batches)):
+    for i in tqdm(range(num_batches), desc='Plotting visualizations'):
         for j in range(batch_size):
             ours_batch = torch.load(p.join(ours_dir, f'batch_{i}.pt'))
             ours_minus_batch = torch.load(p.join(ours_minus_dir, f'batch_{i}.pt'))
@@ -531,27 +534,20 @@ def plot_additional_vis():
             else:
                 vmax_ = max(cpc_inter.max(), ours.max(), gt.max())
                 vmin_ = min(cpc_inter.min(), ours.min(), gt.min())
-            # plot in the order of cpc_inter, cnn, ours-, ours
+
             fig, axes = plt.subplots(1, 6, figsize=(22, 5))
             im1 = axes[0].imshow(cpc_inter, cmap='viridis', vmin=vmin_, vmax=vmax_)
-            # axes[0].set_title('CPC Interpolation')
             im2 = axes[1].imshow(cnn, cmap='viridis', vmin=vmin_, vmax=vmax_)
-            # axes[1].set_title('CNN')
             im3 = axes[2].imshow(cgan, cmap='viridis', vmin=vmin_, vmax=vmax_)
-
             im4 = axes[3].imshow(ours_minus, cmap='viridis', vmin=vmin_, vmax=vmax_)
-            # axes[2].set_title('Ours-')
             im5 = axes[4].imshow(ours, cmap='viridis', vmin=vmin_, vmax=vmax_)
-            # axes[3].set_title('Ours')
             im6 = axes[5].imshow(gt, cmap='viridis', vmin=vmin_, vmax=vmax_)
-            # axes[4].set_title('MRMS')
-            cbar = fig.colorbar(im5, ax=axes, shrink=0.6, pad=0.01)
-            cbar.set_label("Precipitation (mm/day)")
+            cbar = fig.colorbar(im5, ax=axes, shrink=0.55, pad=0.01)
+            cbar.set_label("Precipitation\n(mm/day)", fontsize=14)
             for ax in axes:
                 ax.axis('off')
-
-            # add colorbar at the right of the last image, applies to all images
-            plt.savefig(p.join(output_dir, f'batch_{i}_sample_{j}.png'))
+            plt.savefig(p.join(output_dir, f'batch_{i}_sample_{j}.pdf'),
+                        bbox_inches='tight', dpi=600, transparent=True)
             # plt.show()
             plt.close()
 
@@ -567,10 +563,9 @@ def plot_additional_vis_era5_ablation():
     no_wind_dir = os.path.join(data_root_dir, 'WassDiff_ablation_no_wind_u_v')
     no_vflux_dir = os.path.join(data_root_dir, 'WassDiff_ablation_vlux_e_n')
 
-    yprint('Plotting additional visualizations')
     num_batches = 25
     batch_size = 12
-    for i in tqdm(range(num_batches)):
+    for i in tqdm(range(num_batches), desc='Plotting visualizations'):
         for j in range(batch_size):
 
             ours_batch = torch.load(p.join(ours_dir, f'batch_{i}.pt'))
@@ -603,24 +598,24 @@ def plot_additional_vis_era5_ablation():
                 vmin_ = min(cpc_inter.min(), ours.min(), gt.min())
             # plot in the order of cpc_inter, cnn, ours-, ours
             fig, axes = plt.subplots(1, 10, figsize=(14, 3))
-            # im1 = axes[0].imshow(cpc_inter, cmap='viridis', vmin=vmin_, vmax=vmax_)
-            im2 = axes[1].imshow(no_precip, cmap='viridis', vmin=vmin_, vmax=vmax_)
-            im3 = axes[2].imshow(precip_only, cmap='viridis', vmin=vmin_, vmax=vmax_)
-            im4 = axes[3].imshow(no_density, cmap='viridis', vmin=vmin_, vmax=vmax_)
-            im5 = axes[4].imshow(no_surf_temp, cmap='viridis', vmin=vmin_, vmax=vmax_)
-            im6 = axes[5].imshow(no_elevation, cmap='viridis', vmin=vmin_, vmax=vmax_)
-            im7 = axes[6].imshow(no_wind, cmap='viridis', vmin=vmin_, vmax=vmax_)
-            im8 = axes[7].imshow(no_vflux, cmap='viridis', vmin=vmin_, vmax=vmax_)
-            im9 = axes[8].imshow(ours, cmap='viridis', vmin=vmin_, vmax=vmax_)
-            im10 = axes[9].imshow(gt, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            # axes[0].imshow(cpc_inter, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            axes[1].imshow(precip_only, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            axes[2].imshow(no_precip, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            axes[3].imshow(no_density, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            axes[4].imshow(no_surf_temp, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            axes[5].imshow(no_elevation, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            axes[6].imshow(no_wind, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            axes[7].imshow(no_vflux, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            axes[8].imshow(ours, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im9 = axes[9].imshow(gt, cmap='viridis', vmin=vmin_, vmax=vmax_)
             cbar = fig.colorbar(im9, ax=axes, shrink=0.31, pad=0.01)
-            cbar.set_label("Precipitation\n(mm/day)", fontsize=9)
+            cbar.set_label("Precipitation\n(mm/day)", fontsize=7)
             cbar.ax.tick_params(labelsize=6)
             for ax in axes:
                 ax.axis('off')
             # add colorbar at the right of the last image, applies to all images
             plt.savefig(p.join(output_dir, f'batch_{i}_sample_{j}.pdf'),
-                        bbox_inches='tight', dpi=600)
+                        bbox_inches='tight', dpi=600, transparent=True)
             # plt.show()
             plt.close()
 
@@ -662,11 +657,11 @@ def main():
     # skill_vs_ensemble_size()
 
     # hist and spectra
-    # build_hist_for_all_methods(ensemble_size=13, graph_to_build='hist')
+    build_hist_for_all_methods(ensemble_size=13, graph_to_build='hist')
     # build_hist_for_all_methods(ensemble_size=13, graph_to_build='spectra')
 
     # plot_additional_vis()
-    plot_additional_vis_era5_ablation()
+    # plot_additional_vis_era5_ablation()
     # sample_bias_during_training()
 if __name__ == '__main__':
     main()
