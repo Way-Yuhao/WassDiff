@@ -36,13 +36,13 @@ model:
 
 
 #### SPECIFY EVAL MODE ####
-name: debug_predefined_events_cold
+name: precipation_1000
 event_name: cold_front
 data:
   dataloader_mode: specify_eval
   batch_size: 1  # DO NOT MODIFY
   data_config:
-    image_size: 1024 # 521
+    image_size: 1000
   specify_eval_targets: ${data.known_eval_targets.${event_name}}
 #  specify_eval_targets:
 #    - date: '20150618'

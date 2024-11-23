@@ -5,6 +5,7 @@ from matplotlib import pyplot as plt
 from src.utils.ncsn_utils.sampling import NoneCorrector, NonePredictor, shared_corrector_update_fn, shared_predictor_update_fn
 import functools
 from rich.progress import track
+from src.utils.image_spliter import ImageSpliterTh
 # from src.utils.metrics import calc_emd
 # from losses import sliced_wasserstein_distance
 
@@ -324,24 +325,110 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
     projector_upsample_update_fn = get_upsample_update_fn(predictor_update_fn)
     corrector_upsample_update_fn = get_upsample_update_fn(corrector_update_fn)
 
-    def pc_upsampler(model, condition, w, out_dim, save_dir=None, null_condition=None, display_pbar=True, gt=None):
-        # emd
+    def pc_upsampler(model, condition, w, out_dim, save_dir=None, null_condition=None, display_pbar=False, gt=None,
+                     null=None):
+        # EMD (Empirical Model Decomposition)
         discrete_sigmas = torch.exp(torch.linspace(np.log(0.01), np.log(50), 1000))
         smld_sigma_array = torch.flip(discrete_sigmas, dims=(0,))
 
         with torch.no_grad():
-            # Initial sample
+            # Initial sample: x is the full image
             x = sde.prior_sampling(out_dim).to(condition.device)
             noise = x.clone()
             timesteps = torch.linspace(sde.T, eps, sde.N)
 
             if display_pbar:
+                patch_size = 256  # Patch size
+                stride = 192  # Stride (overlap between patches)
+                sf = 1
+                batch_size = 3  # Batch size for processing patches
+
                 for i in track(range(sde.N), description=f'Sampling {sde.N} steps....', refresh_per_second=1):
                     t = timesteps[i]
-                    x, x_mean = corrector_upsample_update_fn(model, x=x, t=t, c=condition, w=w, null_cond=null_condition) #this is the step that's not correct
-                    x, x_mean = projector_upsample_update_fn(model, x=x, t=t, c=condition, w=w, null_cond=null_condition)
+                    # Reset accumulators in im_spliter at each timestep
+                    im_spliter = ImageSpliterTh(x, patch_size, stride, sf=sf)
 
-                    # if i in show_vis_at_steps:  # show diffusion progression
+                    # Initialize lists to collect patches
+                    pch_x_list = []
+                    pch_condition_list = []
+                    pch_null_condition_list = []
+                    idx_info_list = []
+
+                    # Iterate over patches
+                    for pch_x, (h_start_sf, h_end_sf, w_start_sf, w_end_sf) in im_spliter:
+                        # Extract the conditioning patch
+                        h_start = h_start_sf // sf
+                        h_end = h_end_sf // sf
+                        w_start = w_start_sf // sf
+                        w_end = w_end_sf // sf
+
+                        pch_condition = condition[:, :, h_start:h_end, w_start:w_end]
+                        pch_null_condition = torch.ones_like(pch_condition) * null
+
+                        # Append patches to lists
+                        pch_x_list.append(pch_x)
+                        pch_condition_list.append(pch_condition)
+                        pch_null_condition_list.append(pch_null_condition)
+                        idx_info_list.append((h_start_sf, h_end_sf, w_start_sf, w_end_sf))
+
+                        # Check if batch is ready
+                        if len(pch_x_list) == batch_size:
+                            # Process the batch
+                            batch_pch_x = torch.cat(pch_x_list, dim=0)
+                            batch_pch_condition = torch.cat(pch_condition_list, dim=0)
+                            batch_pch_null_condition = torch.cat(pch_null_condition_list, dim=0)
+                            batch_idx_info = idx_info_list
+
+                            # Apply denoising updates to the batch of patches
+                            batch_pch_x, batch_pch_x_mean = corrector_upsample_update_fn(
+                                model, x=batch_pch_x, t=t, c=batch_pch_condition, w=w,
+                                null_cond=batch_pch_null_condition)
+                            batch_pch_x, batch_pch_x_mean = projector_upsample_update_fn(
+                                model, x=batch_pch_x, t=t, c=batch_pch_condition, w=w,
+                                null_cond=batch_pch_null_condition)
+
+                            # Update the merged image with the processed patches
+                            for idx_in_batch, (h_start_sf, h_end_sf, w_start_sf, w_end_sf) in enumerate(batch_idx_info):
+                                pch_x_i_mean = batch_pch_x_mean[idx_in_batch:idx_in_batch + 1]
+                                if i == sde.N - 1:
+                                    im_spliter.update_gaussian(pch_x_i_mean,
+                                                               (h_start_sf, h_end_sf, w_start_sf, w_end_sf))
+                                else:
+                                    pch_x_i = batch_pch_x[idx_in_batch:idx_in_batch + 1]
+                                    im_spliter.update_gaussian(pch_x_i, (h_start_sf, h_end_sf, w_start_sf, w_end_sf))
+
+                            # Reset lists for next batch
+                            pch_x_list = []
+                            pch_condition_list = []
+                            pch_null_condition_list = []
+                            idx_info_list = []
+
+                    # Process any remaining patches
+                    if len(pch_x_list) > 0:
+                        # Process the batch
+                        batch_pch_x = torch.cat(pch_x_list, dim=0)
+                        batch_pch_condition = torch.cat(pch_condition_list, dim=0)
+                        batch_pch_null_condition = torch.cat(pch_null_condition_list, dim=0)
+                        batch_idx_info = idx_info_list
+
+                        # Apply denoising updates to the batch of patches
+                        batch_pch_x, batch_pch_x_mean = corrector_upsample_update_fn(
+                            model, x=batch_pch_x, t=t, c=batch_pch_condition, w=w, null_cond=batch_pch_null_condition)
+                        batch_pch_x, batch_pch_x_mean = projector_upsample_update_fn(
+                            model, x=batch_pch_x, t=t, c=batch_pch_condition, w=w, null_cond=batch_pch_null_condition)
+
+                        # Update the merged image with the processed patches
+                        for idx_in_batch, (h_start_sf, h_end_sf, w_start_sf, w_end_sf) in enumerate(batch_idx_info):
+                            pch_x_i_mean = batch_pch_x_mean[idx_in_batch:idx_in_batch + 1]
+                            if i == sde.N - 1:
+                                im_spliter.update_gaussian(pch_x_i_mean, (h_start_sf, h_end_sf, w_start_sf, w_end_sf))
+                            else:
+                                pch_x_i = batch_pch_x[idx_in_batch:idx_in_batch + 1]
+                                im_spliter.update_gaussian(pch_x_i, (h_start_sf, h_end_sf, w_start_sf, w_end_sf))
+
+                    # Gather the patches to form the full image at the current timestep
+                    x = im_spliter.gather()
+
                     if i % 5 == 0:
                         sigmas = smld_sigma_array.to(x.device)[i]
                         # perturbed_gt = gt + (noise * (sigmas / 50))
@@ -366,10 +453,47 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
             else:
                 for i in range(sde.N):
                     t = timesteps[i]
-                    x, x_mean = corrector_upsample_update_fn(model, x=x, t=t, c=condition, w=w, null_cond=null_condition)
-                    x, x_mean = projector_upsample_update_fn(model, x=x, t=t, c=condition, w=w, null_cond=null_condition)
+                    x, x_mean = corrector_upsample_update_fn(model, x=x, t=t, c=condition, w=w,
+                                                             null_cond=null_condition)
+                    x, x_mean = projector_upsample_update_fn(model, x=x, t=t, c=condition, w=w,
+                                                             null_cond=null_condition)
 
-            return inverse_scaler(x_mean if denoise else x)
+            return inverse_scaler(x)
+
+                # patch_size = 256  # Example patch size
+                # stride = 192  # Example stride (overlap between patches)
+                # sf = 1
+                # im_spliter = ImageSpliterTh(x, patch_size, stride, sf=sf)
+                # for i in range(sde.N):
+                #     t = timesteps[i]
+                #
+                #     # Reset accumulators in im_spliter at each timestep
+                #     im_spliter.reset_accumulators()
+                #     print(f"pch_output shape before: {x.shape}")
+                #     # Iterate over patches
+                #     for pch_x, (h_start, h_end, w_start, w_end)  in im_spliter:
+                #
+                #         # Extract corresponding condition and null condition patches
+                #         pch_condition = condition[:, :, h_start:h_end, w_start:w_end]
+                #         pch_null_condition = null_condition[:, :, h_start:h_end, w_start:w_end]
+                #         print(pch_condition.shape, pch_null_condition.shape)
+                #
+                #
+                #         # Apply denoising updates to the patch
+                #         x, x_mean = corrector_upsample_update_fn(model, x=x, t=t, c=pch_condition, w=w, null_cond=pch_null_condition)
+                #         x, x_mean = projector_upsample_update_fn(model, x=x, t=t, c=pch_condition, w=w, null_cond=pch_null_condition)
+                #         print(f"pch_output shape: {x.shape}")
+                #
+                #         x_patch = inverse_scaler(x_mean if denoise else x)
+                #         # Update the merged image with the processed patch
+                #         im_spliter.update_gaussian(x_patch, (h_start, h_end, w_start, w_end) )
+                #
+                #     # Gather the patches to form the full image at the current timestep
+                #     x = im_spliter.gather()
+                #     print(f"pch_output shape after: {x.shape}")
+                #
+                # return inverse_scaler(x)
+
 
 
 

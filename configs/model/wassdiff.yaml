@@ -21,7 +21,7 @@ optimizer_config:
 
 tiled_config:
   pch_size: 256
-  stride: 192
+  stride: 64
   sf: 1
 
 

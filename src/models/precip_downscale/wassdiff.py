@@ -261,73 +261,72 @@ class WassDiffLitModule(LightningModule):
         if self.hparams.bypass_sampling:
             batch_dict['precip_output'] = torch.zeros_like(gt)
         else:
-            if self.tiled_diffusion:
-            # Implement tiled diffusion using ImageSpliter Parameters for splitting
-                    pch_size = self.tiled_config.pch_size  # Define in your config
-                    stride = self.tiled_config.stride  # Define in your config
-                    sf = self.tiled_config.sf  # Scale factor, adjust if necessary
-
-                    # Initialize the ImageSpliterTh
-                    im_spliter = ImageSpliterTh(condition, pch_size, stride, sf=sf)
-
-
-                    # Process each patch
-                    for pch_condition, (h_start, h_end, w_start, w_end) in im_spliter:
-                        # Apply the scaler to the patch
-                        pch_condition_scaled = self.scaler(pch_condition)
-
-                        # Generate the null condition for the patch
-                        pch_null_condition = torch.ones_like(pch_condition) * self.model_config.model.null_token
-
-                        # Process the patch using the model
-                        pch_output = self.pc_upsampler(
-                            self.net,
-                            pch_condition_scaled,
-                            w=self.model_config.model.w_guide,
-                            out_dim=(pch_condition.shape[0], 1, pch_condition.shape[2], pch_condition.shape[3]),
-                            save_dir=None,
-                            null_condition=pch_null_condition,
-                            gt=None,  # Optionally provide gt if needed
-                            display_pbar=self.hparams.display_sampling_pbar
-                        )
-
-                        print(f"pch_output shape: {pch_output.shape}")
-                        print(f"pch_condition_scaled shape: {pch_condition_scaled.shape}")
-
-                        # Update the result image using the update_gaussian method
-                        im_spliter.update_gaussian(pch_output, (h_start, h_end, w_start, w_end))
-
-                        # Normalize the result by the pixel counts to handle overlaps
-                    x = im_spliter.gather()
-                    print(x.dim())
-                    print(x.shape)
-
-
-                    if self.hparams.num_samples == 1:
-                        batch_dict['precip_output'] = x[:, 0:1, :, :]
-                    else:
-                        for i in range(self.hparams.num_samples):
-                            batch_dict['precip_output_' + str(i)] = x[i, :, :, :]
-            else:
+            # if self.tiled_diffusion:
+            # # Implement tiled diffusion using ImageSpliter Parameters for splitting
+            #         pch_size = self.tiled_config.pch_size  # Define in your config
+            #         stride = self.tiled_config.stride  # Define in your config
+            #         sf = self.tiled_config.sf  # Scale factor, adjust if necessary
+            #
+            #         # Initialize the ImageSpliterTh
+            #         im_spliter = ImageSpliterTh(condition, pch_size, stride, sf=sf)
+            #
+            #
+            #         # Process each patch
+            #         for pch_condition, (h_start, h_end, w_start, w_end) in im_spliter:
+            #             # Apply the scaler to the patch
+            #             pch_condition_scaled = self.scaler(pch_condition)
+            #
+            #             # Generate the null condition for the patch
+            #             pch_null_condition = torch.ones_like(pch_condition) * self.model_config.model.null_token
+            #
+            #             # Process the patch using the model
+            #             pch_output = self.pc_upsampler(
+            #                 self.net,
+            #                 pch_condition_scaled,
+            #                 w=self.model_config.model.w_guide,
+            #                 out_dim=(pch_condition.shape[0], 1, pch_condition.shape[2], pch_condition.shape[3]),
+            #                 save_dir=None,
+            #                 null_condition=pch_null_condition,
+            #                 gt=None,  # Optionally provide gt if needed
+            #                 display_pbar=self.hparams.display_sampling_pbar
+            #             )
+            #
+            #             print(f"pch_output shape: {pch_output.shape}")
+            #             print(f"pch_condition_scaled shape: {pch_condition_scaled.shape}")
+            #
+            #             # Update the result image using the update_gaussian method
+            #             im_spliter.update_gaussian(pch_output, (h_start, h_end, w_start, w_end))
+            #
+            #             # Normalize the result by the pixel counts to handle overlaps
+            #         x = im_spliter.gather()
+            #         print(x.dim())
+            #         print(x.shape)
+            #
+            #
+            #         if self.hparams.num_samples == 1:
+            #             batch_dict['precip_output'] = x[:, 0:1, :, :]
+            #         else:
+            #             for i in range(self.hparams.num_samples):
+            #                 batch_dict['precip_output_' + str(i)] = x[i, :, :, :]
                 # Execute as normal
-                print(batch_size)
-                print(self.model_config.data.image_size)
-                x = self.pc_upsampler(self.net, self.scaler(condition), w=self.model_config.model.w_guide,
+                # print(batch_size)
+                # print(self.model_config.data.image_size)
+
+            ##change the image size here
+            x = self.pc_upsampler(self.net, self.scaler(condition), w=self.model_config.model.w_guide,
                                       out_dim=(batch_size, 1, self.model_config.data.image_size, self.model_config.data.image_size),
                                       save_dir=None, null_condition=null_condition, gt=gt,
-                                      display_pbar=self.hparams.display_sampling_pbar)
-                print(x.dim())
-                print(x.shape)
-                if self.hparams.num_samples == 1:
+                                      display_pbar=self.hparams.display_sampling_pbar, null = self.model_config.model.null_token)
+            if self.hparams.num_samples == 1:
                     # print dimension
                     batch_dict['precip_output'] = x
-                else:
-                    for i in range(self.hparams.num_samples):
-                        batch_dict['precip_output_' + str(i)] = x[i, :, :, :]
-                print(batch_dict)
-                print(batch_coords)
-                print(xr_low_res_batch)
-                print(valid_mask)
+            else:
+                for i in range(self.hparams.num_samples):
+                    batch_dict['precip_output_' + str(i)] = x[i, :, :, :]
+                # print(batch_dict)
+                # print(batch_coords)
+                # print(xr_low_res_batch)
+                # print(valid_mask)
         return {'batch_dict': batch_dict, 'batch_coords': batch_coords, 'xr_low_res_batch': xr_low_res_batch,
                 'valid_mask': valid_mask}
 
