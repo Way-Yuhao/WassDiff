@@ -1,0 +1,7 @@
+# @package _global_
+model:
+  tiled_config:
+    patch_size: 256  # Patch size
+    stride: 192  # Stride (overlap between patches)
+    batch_size: 12  # Batch size for processing patches
+    sf: 1 # DO NOT MODIFY
