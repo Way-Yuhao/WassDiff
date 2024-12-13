@@ -341,7 +341,7 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
                 patch_size = 256  # Patch size
                 stride = 192  # Stride (overlap between patches)
                 sf = 1
-                batch_size = 3  # Batch size for processing patches
+                batch_size = 12  # Batch size for processing patches
 
                 for i in track(range(sde.N), description=f'Sampling {sde.N} steps....', refresh_per_second=1):
                     t = timesteps[i]
