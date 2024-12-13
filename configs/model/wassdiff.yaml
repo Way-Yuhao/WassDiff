@@ -25,6 +25,8 @@ tiled_config:
   batch_size: 12  # Batch size for processing patches
   sf: 1 # DO NOT MODIFY
 
+vis_params: null
+
 
 #scheduler:
 model_config:

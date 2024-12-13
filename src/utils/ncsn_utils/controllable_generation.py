@@ -348,7 +348,7 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
                 batch_size = tiled_params['batch_size']
 
                 for i in track(range(sde.N), description=f'Sampling {sde.N} steps....', refresh_per_second=1,
-                               disable=display_pbar):
+                               disable=~display_pbar):
                     t = timesteps[i]
                     # Reset accumulators in im_spliter at each timestep
                     im_spliter = ImageSpliterTh(x, patch_size, stride, sf=sf)
@@ -434,11 +434,11 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
 
                     # Gather the patches to form the full image at the current timestep
                     x = im_spliter.gather()
-                    return inverse_scaler(x)  # as x_mean
+                return inverse_scaler(x)  # as x_mean
 
             else: # not tiled
                 for i in track(range(sde.N), description=f'Sampling {sde.N} steps....', refresh_per_second=1,
-                               disable=display_pbar):
+                               disable=~display_pbar):
                     t = timesteps[i]
                     x, x_mean = corrector_upsample_update_fn(model, x=x, t=t, c=condition, w=w,
                                                              null_cond=null_condition)
