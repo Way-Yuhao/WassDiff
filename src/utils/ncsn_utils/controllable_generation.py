@@ -338,17 +338,13 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
             timesteps = torch.linspace(sde.T, eps, sde.N)
 
             if tiled_params:
-                # patch_size = 256  # Patch size
-                # stride = 192  # Stride (overlap between patches)
-                # sf = 1
-                # batch_size = 12  # Batch size for processing patches
                 patch_size = tiled_params['patch_size']
                 stride = tiled_params['stride']
                 sf = tiled_params['sf']
                 batch_size = tiled_params['batch_size']
 
                 for i in track(range(sde.N), description=f'Sampling {sde.N} steps....', refresh_per_second=1,
-                               disable=~display_pbar):
+                               disable=not display_pbar):
                     t = timesteps[i]
                     # Reset accumulators in im_spliter at each timestep
                     im_spliter = ImageSpliterTh(x, patch_size, stride, sf=sf)
@@ -438,7 +434,7 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
 
             else: # not tiled
                 for i in track(range(sde.N), description=f'Sampling {sde.N} steps....', refresh_per_second=1,
-                               disable=~display_pbar):
+                               disable=not display_pbar):
                     t = timesteps[i]
                     x, x_mean = corrector_upsample_update_fn(model, x=x, t=t, c=condition, w=w,
                                                              null_cond=null_condition)
