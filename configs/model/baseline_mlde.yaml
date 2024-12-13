@@ -1,0 +1,98 @@
+_target_: src.models.baselines.mlde.mlde_lightning.MLDELitModule
+
+compile: false
+num_samples: 1 # for inference, aka ensemble size
+
+# debugging flags
+#display_sampling_pbar: false  # display 'sampling N steps' progress bar
+bypass_sampling: false  # during inference; training logging is not affected
+
+optimizer_config:
+  optim:
+    weight_decay: 0
+    optimizer: 'Adam'
+    lr: 2e-4
+    beta1: 0.9
+    betas: [0.9, 0.999] # WassDiff
+    eps: 1e-8
+    warmup: 5000
+    grad_clip: 1.0
+
+model_config:
+  model:
+    name: 'cncsnpp'
+    sigma_min: 0.01
+    sigma_max: 50
+    num_scales: 1000
+    beta_min: 0.1
+    beta_max: 20.0
+    dropout: 0.1
+    normalization: 'GroupNorm'  # new: Found in provided code
+    nonlinearity: 'swish'
+    nf: 128  # Number of feature maps
+    ch_mult: [1, 2, 2, 2]  # Channel multipliers
+    num_res_blocks: 4
+    attn_resolutions: [16]  # Resolutions where attention is applied
+    resamp_with_conv: True
+    conditional: True  # For time condition
+    fir: True  # FIR interpolation
+    fir_kernel: [1, 3, 3, 1]
+    skip_rescale: True
+    resblock_type: 'biggan'
+    progressive: 'none'
+    progressive_input: 'residual'
+    progressive_combine: 'sum'
+    attention_type: 'ddpm'
+    init_scale: 0.0
+    embedding_type: 'positional'
+    fourier_scale: 16  # Fourier embedding scale
+    conv_size: 3  # Convolution size
+    ema_rate: 0.9999  # MLDE
+    scale_by_sigma: True  # Scale by sigma during sampling
+    drop_prob: 0.1  # Drop probability for CIFAR10
+    w_guide: 0
+    null_token: -1
+    # MLDE specific
+    loc_spec_channels: 0
+  data:
+    image_size: ${data.data_config.image_size}  # WassDiff
+    condition_mode: ${data.data_config.condition_mode}
+    num_channels: ${data.data_config.num_channels}
+    num_context_chs: ${data.data_config.num_context_chs}
+    condition_size: ${data.data_config.condition_size}  # only for logging?
+    centered: ${data.data_config.centered} # WassDiff; should be False
+    precip_rescale_c: ${data.data_config.precip_rescale_c}
+    # MLDE specific
+    time_inputs: false
+
+  training:
+    batch_size: 16
+    n_iters: 500000 # WassDiff
+    snapshot_sampling: False
+    likelihood_weighting: False
+    continuous: True
+    reduce_mean: True # MLDE
+    sde: 'subvpsde'
+    task: 'super_resolution'
+    use_emd: false  # Placeholder for EMD usage
+    emd_weight: 0  # Weight for EMD loss
+    compute_rescaled_emd: false  # Placeholder
+  sampling:
+    n_steps_each: 1
+    noise_removal: True
+    probability_flow: False
+    snr: 0.16
+    method: 'pc'  # Predictor-corrector method
+    predictor: 'euler_maruyama'
+    corrector: 'none'
+    sampling_batch_size: 12  # WassDiff
+
+#evaluation:
+#  begin_ckpt: 9
+#  end_ckpt: 26
+#  batch_size: 128
+#  enable_sampling: False
+#  num_samples: 50000
+#  enable_loss: True
+#  enable_bpd: False
+#  bpd_dataset: 'test'

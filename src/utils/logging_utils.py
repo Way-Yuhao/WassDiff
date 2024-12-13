@@ -1,8 +1,8 @@
 from typing import Any, Dict
-
 from lightning_utilities.core.rank_zero import rank_zero_only
 from omegaconf import OmegaConf
-
+import wandb
+from lightning.pytorch.loggers.wandb import WandbLogger
 from src.utils import pylogger
 
 log = pylogger.RankedLogger(__name__, rank_zero_only=True)
@@ -52,6 +52,18 @@ def log_hyperparameters(object_dict: Dict[str, Any]) -> None:
     hparams["ckpt_path"] = cfg.get("ckpt_path")
     hparams["seed"] = cfg.get("seed")
 
-    # send hparams to all loggers
-    for logger in trainer.loggers:
-        logger.log_hyperparams(hparams)
+    #### ADDITIONAL CODE TO LOG INTERPOLATED CONFIG FILE VIA W&B ####
+    cfg = object_dict["cfg"]
+    if OmegaConf.is_config(cfg):     # Resolve the config
+        cfg_resolved = OmegaConf.to_container(cfg, resolve=True)
+    else: # Handle the case where cfg is already a dictionary
+        cfg_resolved = cfg
+    wandb_logger = None
+    for logger in object_dict['logger']:
+        if isinstance(logger, WandbLogger):
+            wandb_logger = logger
+            break
+    if wandb_logger:
+        wandb_logger.experiment.config.update(cfg_resolved)
+    ##################################################################
+    return

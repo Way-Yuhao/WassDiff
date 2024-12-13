@@ -1,0 +1,38 @@
+# @package _global_
+# Stage 3 training of CorrectorGAN: adversarial training
+
+defaults:
+  - override /model: baseline_corrector_gan
+  - _self_
+
+logger:
+  wandb:
+    project: "WassDiff-Baselines"
+    name: 'CorrectorGan reproduce'
+
+callbacks:
+  log_precip_data:
+    train_log_score_freq: -1
+    show_samples_at_start: true
+  stop_if_nan:
+    monitor: ['discriminator_loss', 'generator_loss']
+    every_n_train_steps: 100
+    model_save_every_n_train_steps: 10000
+
+model:
+  gen_ckpt: ${local.model_root_dir}/WassDiff-LiT/2024-10-07_20-28-35/checkpoints/epoch_024_step_042.ckpt
+
+data:
+  ######## det eval ########
+#  use_val_samples_from: ${paths.data_dir}/rainfall_eval/val_det_samples_256
+#  dataloader_mode: train_det_val
+  ##########################
+  data_config:
+    image_size: 128 # size of high-resolution image
+    condition_size: 128 # size of low-resolution image
+  batch_size: 12  # FIXME: change to 12
+  num_workers: 12 # FIXME: change to 12
+#trainer:
+#  limit_train_batches: 2  # debug
+#  limit_val_batches: 10 # debug
+#  check_val_every_n_epoch: 1  # debug

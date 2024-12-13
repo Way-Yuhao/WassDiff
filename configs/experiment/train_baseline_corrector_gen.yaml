@@ -1,0 +1,37 @@
+# @package _global_
+# Stage 2 training of CorrectorGAN: train Generator
+
+defaults:
+  - override /model: baseline_corrector_gen
+  - _self_
+
+trainer:
+  max_epochs: 100 # 50
+  check_val_every_n_epoch: 5
+
+logger:
+  wandb:
+    project: "WassDiff-Baselines"
+    name: 'CorrectorGan: train Generator'
+
+callbacks:
+  log_precip_data:
+    train_log_score_freq: -1
+    train_log_img_freq: 5
+    train_log_param_freq: 5
+    show_samples_at_start: true
+    report_sample_metrics: false  # due to dim mismatch between model output and gt
+
+model:
+  corrector_ckpt: ${local.model_root_dir}/WassDiff-LiT/2024-10-07_14-08-01/checkpoints/epoch_049_step_077.ckpt
+
+data:
+  ######## det eval ########
+#  use_val_samples_from: ${paths.data_dir}/rainfall_eval/val_det_samples_256
+#  dataloader_mode: train_det_val
+  ##########################
+  data_config:
+    image_size: 128 # size of high-resolution image
+    condition_size: 128 # size of low-resolution image
+  batch_size: 12  # FIXME: change to 12
+  num_workers: 12 # FIXME: change to 12

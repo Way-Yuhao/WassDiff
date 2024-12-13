@@ -1,0 +1,54 @@
+# taken from notebooks/export_experiment_args.ipynb -> CorrectorGan (cell 2)
+
+_target_: src.models.baselines.corrector_gan.lit_module.CorrectorGan
+generator:
+  _target_: src.models.baselines.corrector_gan.models.CorrectorGen2
+  _partial_: true
+discriminator:
+  _target_: src.models.baselines.corrector_gan.models.LeinDisc
+  _partial_: true
+
+noise_shape: [6, 1, 16, 16]
+input_channels: 8
+zero_noise: false
+
+#### ADDITIONAL PARAMS ####
+use_gradient_clipping: false
+###########################
+
+opt_hparams:
+  gen_optimiser: 'adam'
+  disc_optimiser: 'adam'
+  disc_lr: 5e-5
+  gen_lr: 5e-5
+  gen_freq: 1
+  disc_freq: 5
+  b1: 0.0
+  b2: 0.9
+
+loss_hparams:
+  gen_loss:
+    wasserstein: 1.0
+    ens_mean_lr_corrected_l1: 20.0
+    ens_mean_L1_weighted: 20.0
+  disc_loss:
+    wasserstein: 1.0
+    gradient_penalty: 10.0
+
+val_hparams:
+  val_nens: 1  # official: 10
+
+# additional params
+automatic_optimization: false
+model_config:
+  data:
+    image_size: ${data.data_config.image_size}
+    condition_mode: ${data.data_config.condition_mode}
+    num_channels: ${data.data_config.num_channels}
+    num_context_chs: ${data.data_config.num_context_chs}
+    condition_size: ${data.data_config.condition_size}
+    centered: ${data.data_config.centered}
+    precip_rescale_c: ${data.data_config.precip_rescale_c}
+  sampling:
+    sampling_batch_size: 12
+

@@ -8,6 +8,8 @@ eval_on_dataset:
   skip_existing: true
   show_vis: true
   eval_only_on_existing: false # debug
+  override_batch_idx: true
+  report_results_on_batch: [0, 4]
 
   # metric-related constants
   csi_threshold: ${metrics.csi_threshold}

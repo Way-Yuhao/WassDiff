@@ -1,0 +1,21 @@
+# @package _global_
+
+defaults:
+  - /callbacks: specified_eval
+  - _self_
+
+#### SPECIFY EVAL MODE ####
+event_name: storm_bill
+data:
+  dataloader_mode: specify_eval
+  batch_size: 1  # DO NOT MODIFY
+  data_config:
+    image_size: 512
+  specify_eval_targets: ${data.known_eval_targets.${event_name}}
+#  specify_eval_targets:
+#    - date: '20150618'
+#      lon: 265
+#      lat: 36
+paths:
+  output_dir: ${local.specified_eval_root_dir}/${name}
+  log_dir: ${paths.output_dir}

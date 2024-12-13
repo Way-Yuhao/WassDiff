@@ -137,10 +137,6 @@ def get_smld_loss_fn(vesde, train, reduce_mean=False, use_emd=False, emd_weight:
         noise = torch.randn_like(batch) * sigmas[:, None, None, None]
         perturbed_data = noise + batch
 
-        # custom_summary(model, perturbed_data.shape[1:], labels.shape[1:], condition.shape[1:])
-        # summary(model, perturbed_data, labels, condition)
-
-
         score = model_fn(perturbed_data, labels, condition)  # executes forward pass here
         target = -noise / (sigmas ** 2)[:, None, None, None]
         # compute loss on score

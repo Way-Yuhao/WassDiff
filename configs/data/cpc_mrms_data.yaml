@@ -8,8 +8,8 @@ num_workers: 12
 data_config:
   train_val_split: .2
   uniform_dequantization: false
-  image_size: 512 # size of high-resolution image
-  condition_size: 512 # size of low-resolution image
+  image_size: 256 # size of high-resolution image
+  condition_size: 256 # size of low-resolution image, deprecated
   resolution_ratio: null # calculated in main
   # crop_retry: 10 # this might not be used in code
   skip_invalid_regions: true # do not use invalid regions in training

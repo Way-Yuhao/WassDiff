@@ -13,7 +13,7 @@ class WassDiffAblationERA5Module(WassDiffLitModule):
 
     def __init__(self, model_config: dict, optimizer_config: dict,
                  compile: bool, num_samples: int = 1, pytorch_ckpt_path: Optional[str] = None,
-                 exclude_var: Optional[Union[str, List[str]]] = None) -> None:
+                 exclude_var: Optional[Union[str, List[str]]] = None, *args, **kwargs) -> None:
 
         # dynamically modify config file
         if exclude_var is None:

@@ -9,15 +9,17 @@ import pandas as pd
 import torch
 from hydra import compose, initialize
 from natsort import natsorted
-from tqdm import trange
 import rootutils
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
+from tqdm import tqdm
 from src.data.cpc_mrms_dataset import DailyAggregateRainfallDataset
 from scipy.stats.mstats import winsorize
 import ast
 from src.utils.callbacks.eval_on_dataset import compute_ensemble_metrics
+from src.utils.plot_func import filter_sample_logic, build_histogram_for_sample, build_power_spectral_for_sample
+from src.utils.helper import yprint
 
 """
 META ANALYSIS PLOTS
@@ -360,14 +362,306 @@ def skill_vs_ensemble_size():
     plt.show()
 
 
+def build_hist_for_all_methods(ensemble_size: int, graph_to_build: str):
+    """
+    Build histograms for all methods
+    :param ensemble_size: number of ensemble members
+    :param graph_to_build: 'hist' or 'spectra'
+    """
+    print('Building histograms for all methods with ensemble size ', ensemble_size)
+    sns.set_context('paper', font_scale=1.5)
+
+    out_dir = '/home/yl241/data/rainfall_eval_LiT/general'
+    if not p.exists(out_dir):
+        os.makedirs(out_dir)
+        print(f'Created directory: {out_dir}')
+    all_methods = {
+        'Ours': '/home/yl241/data/rainfall_eval/logp1_emd_ckpt21',
+        # 'Ours-': '/home/yl241/data/rainfall_eval/logp1_ckpt22',
+        'Ours-': '/home/yl241/data/rainfall_eval/sbdm_r',
+        'CNN': '/home/yl241/data/rainfall_eval/cnn_baseline_r21ckpt',
+        'CGAN': '/home/yl241/data/rainfall_eval_LiT/CorrectorGAN_epoch_699'
+    }
+    label_colors = {
+        'Ours': 'tab:blue',
+        'Ours-': 'tab:purple',
+        'CNN': 'tab:green',
+        'CPC_Int': 'tab:orange',
+        'Ground Truth': 'black',
+        'CGAN': 'tab:red'
+    }
+
+    ig, ax = plt.subplots(figsize=(8, 4.5))
+    for method, method_dir in all_methods.items():
+        hist_total = None
+        spectra_total = None
+        if method == 'Ours-' or method == 'Ours':
+            files = []
+            for i in range(1, ensemble_size+1):
+                if i > 1:
+                    method_dir_ = method_dir + f'_{i}'
+                else:
+                    method_dir_ = method_dir
+                additional_files = os.listdir(method_dir_)
+                additional_files = [p.join(method_dir_, f) for f in additional_files if f.endswith('.pt')]
+                files += additional_files
+
+        else:
+            files = os.listdir(method_dir)
+            files = [p.join(method_dir, f) for f in files if f.endswith('.pt')]
+        batch_size = torch.load(files[0])['precip_up'].shape[0]
+        for f in tqdm(files, desc=f'Building histograms for {method}'):
+            batch_dict = torch.load(f)
+            output_batch = batch_dict['precip_output'].cpu().detach().numpy()
+            gt_batch = batch_dict['precip_gt'].cpu().detach().numpy()
+            for i in range(batch_size):
+                output = output_batch[i][0, :, :]
+                gt = gt_batch[i][0, :, :]
+                valid_mask = gt != -1
+                if not filter_sample_logic(valid_mask, logic='remove_any_invalid'):
+                    continue
+                hist_output, bin_edges_output = build_histogram_for_sample(output[valid_mask])
+                spectra_output, freq = build_power_spectral_for_sample(output)
+                if hist_total is None:
+                    hist_total = hist_output
+                    spectra_total = spectra_output
+                else:
+                    hist_total += hist_output
+                    spectra_total += spectra_output
+
+        if graph_to_build == 'hist': # build histograms
+            # normalize histograms to convert to pdf
+            hist_total = hist_total / hist_total.sum()
+            ax.plot(bin_edges_output[:-1], hist_total, label=method, color=label_colors[method], linewidth=2)
+        elif graph_to_build == 'spectra':  # build power spectral density plot
+            if method in ['Ours', 'Ours-']:
+                ax.plot(freq, spectra_total / ensemble_size, label=method, color=label_colors[method], linewidth=2)
+            else:
+                ax.plot(freq, spectra_total, label=method, color=label_colors[method], linewidth=2)
+    # handle ours and cpc_int
+    gt_hist_total, cpc_inter_hist_total, output_hist_total = None, None, None
+    gt_spectra_total, cpc_spectra_total, output_spectral_total = None, None, None
+    files = os.listdir(all_methods['Ours'])
+    files = [f for f in files if f.endswith('.pt')]
+    batch_size = torch.load(os.path.join(all_methods['Ours'], files[0]))['precip_up'].shape[0]
+    for f in tqdm(files, desc=f'Building histograms for CPC and MRMS'):
+        batch_dict = torch.load(p.join(method_dir, f))
+        cpc_inter_batch = batch_dict['precip_up'].cpu().detach().numpy()
+        gt_batch = batch_dict['precip_gt'].cpu().detach().numpy()
+        for i in range(batch_size):
+            cpc_inter = cpc_inter_batch[i][0, :, :]
+            gt = gt_batch[i][0, :, :]
+            valid_mask = gt != -1
+            if not filter_sample_logic(valid_mask, logic='remove_any_invalid'):
+                continue
+            hist_gt, bin_edges_gt = build_histogram_for_sample(gt[valid_mask])
+            hist_cpc, bin_edges_cpc = build_histogram_for_sample(cpc_inter[valid_mask])
+            spectra_cpc, freq = build_power_spectral_for_sample(cpc_inter)
+            spectra_gt, _ = build_power_spectral_for_sample(gt)
+            if gt_hist_total is None:
+                gt_hist_total = hist_gt
+                cpc_inter_hist_total = hist_cpc
+                gt_spectra_total = spectra_gt
+                cpc_spectra_total = spectra_cpc
+            else:
+                gt_hist_total += hist_gt
+                cpc_inter_hist_total += hist_cpc
+                gt_spectra_total += spectra_gt
+                cpc_spectra_total += spectra_cpc
+
+    if graph_to_build == 'hist': # normalize histograms to convert to pdf
+        gt_hist_total = gt_hist_total / gt_hist_total.sum()
+        cpc_inter_hist_total = cpc_inter_hist_total / cpc_inter_hist_total.sum()
+        # build histograms
+        ax.plot(bin_edges_gt[:-1], gt_hist_total, label='Ground Truth', color=label_colors['Ground Truth'], linewidth=2)
+        ax.plot(bin_edges_cpc[:-1], cpc_inter_hist_total, label='CPC_Int', color=label_colors['CPC_Int'], linewidth=2)
+    elif graph_to_build == 'spectra':
+        # build power spectral density plot
+        ax.plot(freq, gt_spectra_total, label='Ground Truth', color=label_colors['Ground Truth'], linewidth=2)
+        ax.plot(freq, cpc_spectra_total, label='CPC_Int', color=label_colors['CPC_Int'], linewidth=2)
+
+    if graph_to_build == 'hist': # histogram
+        ax.set_xlabel('Rainfall intensity (mm/day)')
+        ax.set_ylabel('PDF')
+        ax.set_yscale('log')  # Set log scale for y-axis
+        # ax.set_title('Histograms')
+        # ax.legend()
+        sns.despine()
+        plt.tight_layout()
+        plt.savefig(p.join(out_dir, 'histograms_r.pdf'))
+        plt.show()
+        plt.close()
+    elif graph_to_build == 'spectra': # power spectral density
+        ax.set_xlabel('Frequency (1/km)')
+        ax.set_ylabel('Power Spectra')
+        ax.set_xscale('log')  # Set log scale for x-axis
+        ax.set_yscale('log')  # Set log scale for y-axis
+        # ax.set_title('Power Spectra')
+        # ax.legend()
+        plt.tight_layout()
+        sns.despine()
+        plt.savefig(p.join(out_dir, 'spectra_r.pdf'))
+        plt.show()
+        plt.close()
+
+def plot_additional_vis():
+    output_dir = '/home/yl241/data/rainfall_eval_LiT/general/vis_with_cgan/'
+    ours_dir = '/home/yl241/data/rainfall_eval/logp1_emd_ckpt21'
+    ours_minus_dir = '/home/yl241/data/rainfall_eval/sbdm_r'
+    cnn_dir = '/home/yl241/data/rainfall_eval/cnn_baseline_r21ckpt'
+    cgan_dir = '/home/yl241/data/rainfall_eval_LiT/CorrectorGAN_epoch_699'
+    num_batches = 25
+    batch_size = 12
+    for i in tqdm(range(num_batches), desc='Plotting visualizations'):
+        for j in range(batch_size):
+            ours_batch = torch.load(p.join(ours_dir, f'batch_{i}.pt'))
+            ours_minus_batch = torch.load(p.join(ours_minus_dir, f'batch_{i}.pt'))
+            cnn_batch = torch.load(p.join(cnn_dir, f'batch_{i}.pt'))
+            cgan_batch = torch.load(p.join(cgan_dir, f'batch_{i}.pt'))
+
+            ours = ours_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            ours_minus = ours_minus_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            cnn = cnn_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            cpc_inter = ours_batch['precip_up'][j][0, :, :].cpu().detach().numpy()
+            cgan = cgan_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            gt = ours_batch['precip_gt'][j][0, :, :].cpu().detach().numpy()
+
+            if gt.max() > 0:
+                # 99 percentile of gt
+                vmax_ = np.percentile(gt, 99.9)
+                # vmax_ = gt.max()
+                vmin_ = 0
+            else:
+                vmax_ = max(cpc_inter.max(), ours.max(), gt.max())
+                vmin_ = min(cpc_inter.min(), ours.min(), gt.min())
+
+            fig, axes = plt.subplots(1, 6, figsize=(22, 5))
+            im1 = axes[0].imshow(cpc_inter, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im2 = axes[1].imshow(cnn, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im3 = axes[2].imshow(cgan, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im4 = axes[3].imshow(ours_minus, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im5 = axes[4].imshow(ours, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im6 = axes[5].imshow(gt, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            cbar = fig.colorbar(im5, ax=axes, shrink=0.55, pad=0.01)
+            cbar.set_label("Precipitation\n(mm/day)", fontsize=14)
+            for ax in axes:
+                ax.axis('off')
+            plt.savefig(p.join(output_dir, f'batch_{i}_sample_{j}.pdf'),
+                        bbox_inches='tight', dpi=600, transparent=True)
+            # plt.show()
+            plt.close()
+
+def plot_additional_vis_era5_ablation():
+    output_dir = '/home/yl241/data/rainfall_eval_LiT/general/vis_ablation/'
+    ours_dir = '/home/yl241/data/rainfall_eval/logp1_emd_ckpt21'
+    data_root_dir = '/home/yl241/data/rainfall_eval_LiT'
+    precip_only_dir = os.path.join(data_root_dir, 'WassDiff_ablation_precip_only')
+    no_precip_dir = os.path.join(data_root_dir, 'WassDiff_ablation_no_precip_up')
+    no_density_dir = os.path.join(data_root_dir, 'WassDiff_ablation_density')
+    no_surf_temp_dir = os.path.join(data_root_dir, 'WassDiff_ablation_surf_temp')
+    no_elevation_dir = os.path.join(data_root_dir, 'WassDiff_ablation_elevation')
+    no_wind_dir = os.path.join(data_root_dir, 'WassDiff_ablation_no_wind_u_v')
+    no_vflux_dir = os.path.join(data_root_dir, 'WassDiff_ablation_vlux_e_n')
+
+    num_batches = 25
+    batch_size = 12
+    for i in tqdm(range(num_batches), desc='Plotting visualizations'):
+        for j in range(batch_size):
+
+            ours_batch = torch.load(p.join(ours_dir, f'batch_{i}.pt'))
+            precip_only_batch = torch.load(p.join(precip_only_dir, f'batch_{i}.pt'))
+            no_precip_batch = torch.load(p.join(no_precip_dir, f'batch_{i}.pt'))
+            no_density_batch = torch.load(p.join(no_density_dir, f'batch_{i}.pt'))
+            no_surf_temp_batch = torch.load(p.join(no_surf_temp_dir, f'batch_{i}.pt'))
+            no_elevation_batch = torch.load(p.join(no_elevation_dir, f'batch_{i}.pt'))
+            no_wind_batch = torch.load(p.join(no_wind_dir, f'batch_{i}.pt'))
+            no_vflux_batch = torch.load(p.join(no_vflux_dir, f'batch_{i}.pt'))
+
+            ours = ours_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            cpc_inter = ours_batch['precip_up'][j][0, :, :].cpu().detach().numpy()
+            precip_only = precip_only_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            no_precip = no_precip_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            no_density = no_density_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            no_surf_temp = no_surf_temp_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            no_elevation = no_elevation_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            no_wind = no_wind_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            no_vflux = no_vflux_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            gt = ours_batch['precip_gt'][j][0, :, :].cpu().detach().numpy()
+
+            if gt.max() > 0:
+                # 99 percentile of gt
+                vmax_ = np.percentile(gt, 99.9)
+                # vmax_ = gt.max()
+                vmin_ = 0
+            else:
+                vmax_ = max(cpc_inter.max(), ours.max(), gt.max())
+                vmin_ = min(cpc_inter.min(), ours.min(), gt.min())
+            # plot in the order of cpc_inter, cnn, ours-, ours
+            fig, axes = plt.subplots(1, 10, figsize=(14, 3))
+            # axes[0].imshow(cpc_inter, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            axes[1].imshow(precip_only, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            axes[2].imshow(no_precip, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            axes[3].imshow(no_density, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            axes[4].imshow(no_surf_temp, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            axes[5].imshow(no_elevation, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            axes[6].imshow(no_wind, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            axes[7].imshow(no_vflux, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            axes[8].imshow(ours, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im9 = axes[9].imshow(gt, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            cbar = fig.colorbar(im9, ax=axes, shrink=0.31, pad=0.01)
+            cbar.set_label("Precipitation\n(mm/day)", fontsize=7)
+            cbar.ax.tick_params(labelsize=6)
+            for ax in axes:
+                ax.axis('off')
+            # add colorbar at the right of the last image, applies to all images
+            plt.savefig(p.join(output_dir, f'batch_{i}_sample_{j}.pdf'),
+                        bbox_inches='tight', dpi=600, transparent=True)
+            # plt.show()
+            plt.close()
+
+
+def sample_bias_during_training():
+    # Read and preprocess df1
+    df1 = pd.read_csv('/home/yl241/data/rainfall_eval_LiT/general/sbdm_sample_bias.csv')
+    df1 = df1.rename(columns={'Ablation WDR - val/sample_bias': 'sample_bias'})
+    df1 = df1[['Step', 'sample_bias']]
+    df1['Method'] = 'SBDM'  # Add method name column
+
+    # Read and preprocess df2
+    df2 = pd.read_csv('/home/yl241/data/rainfall_eval_LiT/general/wassdiff_sample_bias.csv')
+    df2 = df2.rename(columns={'WassDiff det val - val/sample_bias': 'sample_bias'})
+    df2 = df2[['Step', 'sample_bias']]
+    df2['Method'] = 'WassDiff'  # Add method name column
+
+    # Concatenate the DataFrames
+    df = pd.concat([df1, df2], ignore_index=True)
+
+    # Plot using Seaborn
+    sns.lineplot(data=df, x='Step', y='sample_bias', hue='Method')
+
+    # Optional: Add labels and title
+    plt.xlabel('Step')
+    plt.ylim([0, 200])
+    plt.ylabel('Sample Bias')
+    plt.title('Sample Bias over Steps for Different Methods')
+
+    # Display the plot
+    plt.show()
+
 def main():
     # plot_qq_ensemble(16, '/home/yl241/workspace/NCSN/plt/qq')
     # dist_output_specific_sample()
     # dist_mean_prior()
     # dist_mean_val_set()
     # show_sde_trajectory()
-    skill_vs_ensemble_size()
+    # skill_vs_ensemble_size()
 
+    # hist and spectra
+    build_hist_for_all_methods(ensemble_size=13, graph_to_build='hist')
+    # build_hist_for_all_methods(ensemble_size=13, graph_to_build='spectra')
 
+    # plot_additional_vis()
+    # plot_additional_vis_era5_ablation()
+    # sample_bias_during_training()
 if __name__ == '__main__':
     main()

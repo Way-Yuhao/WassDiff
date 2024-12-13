@@ -1,6 +1,8 @@
 import os
 import os.path as p
-from typing import Any, Dict, Optional
+import socket
+import traceback
+from typing import Any, Dict, Optional, List, Tuple
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
@@ -11,10 +13,11 @@ from natsort import natsorted
 from datetime import datetime
 from lightning.pytorch.callbacks import RichProgressBar, Callback
 from lightning.pytorch.utilities import rank_zero_only
-from src.utils.helper import yprint, monitor_complete
 import lpips
+from tabulate import tabulate
+from src.utils.helper import yprint, monitor_complete, move_batch_to_cpu, alert
 from src.utils.metrics import calc_mae, calc_mse, calc_rmse, calc_pcc, calc_csi, calc_bias, calc_fss, calc_emd, \
-    calc_hrre, calc_mppe, calc_lpips, calc_crps
+    calc_hrre, calc_mppe, calc_lpips, calc_crps, calc_ssim
 
 
 class EvalOnDataset(Callback):
@@ -23,15 +26,31 @@ class EvalOnDataset(Callback):
     """
 
     def __init__(self, save_dir: str, skip_existing: bool, eval_only_on_existing: bool, show_vis: bool,
-                 csi_threshold: float, heavy_rain_threshold: float, peak_mesoscale_threshold: float):
+                 csi_threshold: float, heavy_rain_threshold: float, peak_mesoscale_threshold: float,
+                 override_batch_idx: bool, report_results_on_batch: Optional[List[int]]):
+        """
+        :param save_dir: Directory to save the outputs
+        :param skip_existing: Skip the test loop if the save_dir already contains outputs
+        :param eval_only_on_existing: Evaluate only on existing outputs
+        :param show_vis: Show visualizations
+        :param csi_threshold: Threshold for CSI
+        :param heavy_rain_threshold: Threshold for heavy rain
+        :param peak_mesoscale_threshold: Threshold for peak mesoscale
+        :param override_batch_idx: Override batch_idx with the one specified in input (use for DDP only). Requires
+        dataloader to provide batch_idx in the input.
+
+        """
         super().__init__()
         self.save_dir = save_dir
         self.skip_existing = skip_existing
         self.eval_only_on_existing = eval_only_on_existing
         self.show_vis = show_vis
+        self.override_batch_idx = override_batch_idx
+        self.report_results_on_batch = report_results_on_batch
         if self.show_vis:
             self.vis_dir = p.join(save_dir, 'vis')
             os.makedirs(self.vis_dir, exist_ok=True)
+        self.hostname = socket.gethostname()
 
         # metrics-related constants
         self.csi_threshold = csi_threshold
@@ -41,6 +60,9 @@ class EvalOnDataset(Callback):
         # to be defined elsewhere
         self.rainfall_dataset = None
         return
+
+    def on_validation_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        self.rainfall_dataset = trainer.datamodule.precip_dataset
 
     def on_test_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         self.rainfall_dataset = trainer.datamodule.precip_dataset
@@ -70,8 +92,8 @@ class EvalOnDataset(Callback):
         if self.eval_only_on_existing:
             pl_module.skip_next_batch = True
             return
-
-        batch_idx = batch[1]['batch_idx']  # for ddp
+        if self.override_batch_idx:
+            batch_idx = batch[1]['batch_idx']  # for ddp
         if os.path.exists(p.join(self.save_dir, f'batch_{batch_idx}.pt')):
             print(f"Skipping batch {batch_idx}; already exists.")
             pl_module.skip_next_batch = True
@@ -83,26 +105,71 @@ class EvalOnDataset(Callback):
             pl_module.skip_next_batch = False
             return
 
-        batch_dict = outputs['batch_dict']
-        batch_idx = batch[1]['batch_idx']  # for ddp
+        batch_dict = move_batch_to_cpu(outputs['batch_dict'])
+
+        if self.override_batch_idx:
+            batch_idx = batch[1]['batch_idx']  # for ddp
         inverse_norm_batch_dict = self.rainfall_dataset.inverse_normalize_batch(batch_dict)  # tensor
         torch.save(inverse_norm_batch_dict, p.join(self.save_dir, f'batch_{batch_idx}.pt'))
+
+        if self.report_results_on_batch is not None:
+            if batch_idx in self.report_results_on_batch:
+                summary_stats, _ = self.compute_metrics(pl_module, save_to_disk=False)
+                self.report_via_slack(trainer, title=f'Preliminary test results with {batch_idx + 1} batches',
+                                      content=df_to_markdown_table(summary_stats))
+        if self.show_vis:
+            # print('Visualizing...')
+            batch_size = batch_dict['precip_gt'].shape[0]
+            for i in range(batch_size):
+                cpc_inter = inverse_norm_batch_dict['precip_up'][i][0, :, :]
+                output = inverse_norm_batch_dict['precip_output'][i][0, :, :]
+                gt = inverse_norm_batch_dict['precip_gt'][i][0, :, :]
+                f = f'batch_{batch_idx}.pt'
+                vis_sample(cpc_inter, output, gt, self.vis_dir, f, i)
         return
 
     @rank_zero_only
     def on_test_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        summary_stats, _ = self.compute_metrics(pl_module, save_to_disk=True)
+        self.report_via_slack(trainer, title='Test completed', content=df_to_markdown_table(summary_stats))
+
+
+    @rank_zero_only
+    def on_validation_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
+                                batch: Any, batch_idx: int, dataloader_idx: int = 0) -> None:
+        batch_dict = move_batch_to_cpu(outputs['batch_dict'])
+        # inverse_norm_batch_dict = self.rainfall_dataset.inverse_normalize_batch(batch_dict)  # tensor
+        torch.save(batch_dict, p.join(self.save_dir, f'batch_{batch_idx}.pt'))
+        return
+
+    @rank_zero_only
+    def on_validation_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        if trainer.sanity_checking:
+            return
+        files_ = os.listdir(self.save_dir)
+        outputs = [f for f in files_ if f.endswith('.pt')]
+        batch_size = torch.load(os.path.join(self.save_dir, outputs[0]))['precip_up'].shape[0]
+
+        for f in tqdm(outputs, desc='Saving outputs'):
+            batch_dict = torch.load(p.join(self.save_dir, f))
+            cpc_inter_batch = batch_dict['precip_up'].cpu().detach().numpy()
+            gt_batch = batch_dict['precip_gt'].cpu().detach().numpy()
+            for i in range(batch_size):
+                cpc_inter = cpc_inter_batch[i][0, :, :]
+                gt = gt_batch[i][0, :, :]
+                if self.show_vis:
+                    vis_sample(cpc_inter, cpc_inter, gt, self.vis_dir, f, i)
+
+
+    def compute_metrics(self, pl_module: "pl.LightningModule", save_to_disk: bool = True) \
+            -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """ Computes eval with all batches saved in disk"""
         show_metric_for = 'ours'  # FIXME: hard coded for now
         files_ = os.listdir(self.save_dir)
         outputs = [f for f in files_ if f.endswith('.pt')]
         batch_size = torch.load(os.path.join(self.save_dir, outputs[0]))['precip_up'].shape[0]
 
-        print(f"HERE, rank = {pl_module.global_rank}")
-
         lpips_model = lpips.LPIPS(net='alex').to(pl_module.device)
-
-        gt_hist_total, cpc_inter_hist_total, output_hist_total = None, None, None
-        gt_spectra_total, cpc_spectra_total, output_spectral_total = None, None, None
-
         metrics = []
         for f in tqdm(outputs, desc='Computing metrics'):
             batch_dict = torch.load(p.join(self.save_dir, f))
@@ -118,14 +185,10 @@ class EvalOnDataset(Callback):
                 if not filter_sample_logic(valid_mask, logic='remove_any_invalid'):
                     continue
                 # TODO: add noise to gt? that would affect pcc and ssim
-
-                if self.show_vis:
-                    vis_sample(cpc_inter, output, gt, self.vis_dir, f, i)
-
+                # if self.show_vis:
+                #     vis_sample(cpc_inter, output, gt, self.vis_dir, f, i)
                 k = 1
                 pooling_func = 'mean'
-                # if show_metric_for == 'cpc_inter':
-                #     output = cpc_inter  # TODO REMOVE THIS!!!!!
 
                 row['batch'] = f
                 row['index'] = i
@@ -136,7 +199,7 @@ class EvalOnDataset(Callback):
                 row['mse'] = calc_mse(output, gt, valid_mask, k=k, pooling_func=pooling_func)
                 row['rmse'] = calc_rmse(output, gt, valid_mask, k=k, pooling_func=pooling_func)
                 row['pcc'] = calc_pcc(output, gt, valid_mask, k=k, pooling_func=pooling_func)
-                # row['ssim'] = calc_ssim(output, gt)
+                row['ssim'] = calc_ssim(output, gt)
                 row['csi'] = calc_csi(output, gt, threshold=10, valid_mask=valid_mask, k=k, pooling_func=pooling_func)
                 row['csi_p16'] = calc_csi(output, gt, threshold=10, valid_mask=valid_mask, k=16,
                                           pooling_func=pooling_func)
@@ -148,10 +211,9 @@ class EvalOnDataset(Callback):
                 row['lpips'] = calc_lpips(output, gt, lpips_model, pl_module.device)
                 metrics.append(list(row.values()))
 
-                # TODO: build hist
         metrics_df = pd.DataFrame(metrics, columns=list(row.keys()))
-
-        metrics_df.to_csv(p.join(self.save_dir, f'metrics_{show_metric_for}.csv'))
+        if save_to_disk:
+            metrics_df.to_csv(p.join(self.save_dir, f'metrics_{show_metric_for}.csv'))
         # compute summary statistics, mean of each metric, ignore batch and index
         summary_stats_mean = metrics_df.iloc[:, 2:].mean()
         summary_stats_std = metrics_df.iloc[:, 2:].std()
@@ -161,19 +223,25 @@ class EvalOnDataset(Callback):
         print("Standard Deviation:")
         print(summary_stats_std)
         summary_stats = pd.concat([summary_stats_mean, summary_stats_std], axis=1)
-
-        # Name the columns appropriately
         summary_stats.columns = ['Mean', 'Standard Deviation']
+        summary_stats.index.name = 'metrics'
 
         # Save to csv
-        summary_stats.to_csv(p.join(self.save_dir, f'summary_stats_{show_metric_for}.csv'))
+        if save_to_disk:
+            summary_stats.to_csv(p.join(self.save_dir, f'summary_stats_{show_metric_for}.csv'))
+        return summary_stats, metrics_df
+
+    def report_via_slack(self, trainer: "pl.Trainer", title: str, content: str):
+        device = str(trainer.strategy.root_device)
+        now = datetime.now().replace(microsecond=0)
+        # Prepare the alert message
+        message = (f'*{title}*```{content}```\n'
+                   f'Host: {self.hostname}\nDevice: {device}\nTime: {now}\nPath: {self.save_dir}')
+        # Send the alert using your alert function
+        alert(message)
         return
 
-    def get_ddp_batch_idx(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", batch: Any,
-                            batch_idx: int):
-        pass
-
-
+################ STATIC METHODS ################
 def filter_sample_logic(valid_mask: np.ndarray, logic: str):
     if logic == 'remove_any_invalid':
         if np.any(~valid_mask):
@@ -236,28 +304,28 @@ def compute_ensemble_metrics(parent_save_dir, save_dir_pattern, show_vis=False, 
         print(f'Only using the first {ensemble_size} runs')
         print(runs)
 
-    # each run should have the same ckpt
-    ckpt_paths = []
-    for run in runs:
-        save_dir = p.join(parent_save_dir, run)
-        with open(p.join(save_dir, 'summary.txt'), 'r') as f:
-            lines = f.readlines()
-            for line in lines:
-                if 'checkpoint' in line:
-                    ckpt_paths.append(line.split(': ')[1].strip())
-                    break
-    assert len(ckpt_paths) == len(runs)
-    assert np.all([ckpt_path == ckpt_paths[0] for ckpt_path in ckpt_paths]), 'Checkpoints are not the same'
+    # each run should have the same ckpt FIMXE
+    # ckpt_paths = []
+    # for run in runs:
+    #     save_dir = p.join(parent_save_dir, run)
+    #     with open(p.join(save_dir, 'summary.txt'), 'r') as f:
+    #         lines = f.readlines()
+    #         for line in lines:
+    #             if 'checkpoint' in line:
+    #                 ckpt_paths.append(line.split(': ')[1].strip())
+    #                 break
+    # assert len(ckpt_paths) == len(runs)
+    # assert np.all([ckpt_path == ckpt_paths[0] for ckpt_path in ckpt_paths]), 'Checkpoints are not the same'
 
     # number of common batches in each run, assuming sequential numbering
     num_batches = min([len([b for b in os.listdir(p.join(parent_save_dir, run)) if 'batch_' in b]) for run in runs])
     print(f'Found {num_batches} batches in each run')
 
-    with open(p.join(ensemble_output_path, 'summary.txt'), 'a') as f:
-        f.write(f'executed on: {datetime.now()}\n')
-        f.write(f'checkpoint: {ckpt_paths[0]}\n')
-        f.write(f'ensemble runs: {runs}\n')
-        f.write(f'number of batches: {num_batches}\n')
+    # with open(p.join(ensemble_output_path, 'summary.txt'), 'a') as f:
+    #     f.write(f'executed on: {datetime.now()}\n')
+    #     f.write(f'checkpoint: {ckpt_paths[0]}\n')
+    #     f.write(f'ensemble runs: {runs}\n')
+    #     f.write(f'number of batches: {num_batches}\n')
 
     batch_size = torch.load(os.path.join(parent_save_dir, runs[0], 'batch_0.pt'))['precip_up'].shape[0]
 
@@ -320,3 +388,7 @@ def compute_ensemble_metrics(parent_save_dir, save_dir_pattern, show_vis=False, 
     # Save to csv
     summary_stats.to_csv(p.join(ensemble_output_path, f'summary_stats_{ensemble_size}_members.csv'))
     return
+
+
+def df_to_markdown_table(df: pd.DataFrame) -> str:
+    return tabulate(df, headers='keys', tablefmt='github')

@@ -1,0 +1,15 @@
+# @package _global_
+
+defaults:
+  - override /model: baseline_corrector_gan
+  - _self_
+
+model:
+  noise_shape: [6, 1, 64, 64] # increased dim to support 512 x 512 output
+  num_samples: 1
+#  compile: false
+
+#ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-10-07_22-43-21/checkpoints/epoch_279_step_371.ckpt
+ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-10-07_22-43-21/checkpoints/epoch_699_step_917.ckpt
+name: CorrectorGAN_epoch_699
+

@@ -44,7 +44,7 @@ test: false
 
 # simply provide checkpoint path to resume training
 #ckpt_path: /home/yl241/models/NCSNPP/wandb/run-20240503_110757-gvq9r51l/checkpoints/checkpoint_21.pth
-ckpt_path : null
+ckpt_path: null
 
 # seed for random number generators in pytorch, numpy and python.random
 seed: null

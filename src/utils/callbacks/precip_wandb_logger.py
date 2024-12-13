@@ -4,28 +4,43 @@ import torch
 import torch.nn.functional as F
 from torchvision.utils import make_grid
 from lightning import LightningModule, Trainer
-from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.utilities.types import STEP_OUTPUT
 from lightning.pytorch.utilities import rank_zero_only
 import wandb
 from matplotlib import pyplot as plt
 from lightning.pytorch.callbacks import RichProgressBar, Callback
-from rich.progress import Progress
 from src.utils.helper import wandb_display_grid, cm_, visualize_batch
+from src.utils.metrics import calc_mae, calc_bias
 
 
 class PrecipDataLogger(Callback):
     def __init__(self, train_log_img_freq: int = 1000, train_log_score_freq: int = 1000,
                  train_log_param_freq: int = 1000, show_samples_at_start: bool = False,
-                 show_unconditional_samples: bool = False):
+                 show_unconditional_samples: bool = False, check_freq_via: str = 'global_step',
+                 enable_save_ckpt: bool = False, add_reference_artifact: bool = False,
+                 report_sample_metrics: bool = True):
+        """
+        Callback to log images, scores and parameters to wandb.
+        :param train_log_img_freq: frequency to log images. Set to -1 to disable
+        :param train_log_score_freq: frequency to log scores. Set to -1 to disable
+        :param train_log_param_freq: frequency to log parameters. Set to -1 to disable
+        :param show_samples_at_start: whether to log samples at the start of training (likely during sanity check)
+        :param show_unconditional_samples: whether to log unconditional samples. Deprecated.
+        :param check_freq_via: whether to check frequency via 'global_step' or 'epoch'
+        :param enable_save_ckpt: whether to save checkpoint
+        :param add_reference_artifact: whether to add the checkpoint as a reference artifact
+        :param report_sample_metrics: whether to report sample metrics
+        """
         super().__init__()
-        # self.train_log_img_freq = train_log_img_freq
-        # self.train_log_score_freq = train_log_score_freq
-        # self.train_log_param_freq = train_log_param_freq
+
+        self.check_freq_via = check_freq_via
+        assert self.check_freq_via in ['global_step', 'epoch']
         self.freqs = {'img': train_log_img_freq, 'score': train_log_score_freq, 'param': train_log_param_freq}
-        self.next_log_idx = {'img': 0 if show_samples_at_start else train_log_img_freq, 'score': 0, 'param': 0}
-        # self.show_samples_at_start = show_samples_at_start
+        self.next_log_idx = {'img': 0 if show_samples_at_start else train_log_img_freq - 1, 'score': 0, 'param': 0}
         self.show_unconditional_samples = show_unconditional_samples
+        self.enable_save_ckpt = enable_save_ckpt
+        self.add_reference_artifact = add_reference_artifact
+        self.report_sample_metrics = report_sample_metrics
 
         if self.show_unconditional_samples:
             raise NotImplementedError('Unconditional samples not implemented yet.')
@@ -37,13 +52,6 @@ class PrecipDataLogger(Callback):
         # self.first_samples_logged = False
         self.first_batch_visualized = False
         return
-
-    def _check_frequency(self, check_idx: int, key: str):
-        if check_idx >= self.next_log_idx[key]:
-            self.next_log_idx[key] = check_idx + self.freqs[key]
-            return True
-        else:
-            return False
 
     @rank_zero_only
     def on_fit_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
@@ -67,17 +75,21 @@ class PrecipDataLogger(Callback):
         return
 
     @rank_zero_only
-    def on_validation_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
-                                batch: Any, batch_idx: int, dataloader_idx: int = 0) -> None:
-
-        if self._check_frequency(trainer.global_step, 'img'):
-            self._log_samples(trainer, pl_module, outputs)
+    def on_train_batch_end(self, trainer: Trainer, pl_module: LightningModule, outputs: Any,
+                           batch: Any, batch_idx: int) -> None:
+        if self._check_frequency(trainer, 'score'):
+            self._log_score(pl_module, outputs)
 
     @rank_zero_only
-    def on_train_batch_end(self, trainer: Trainer, pl_module: LightningModule,
-                           outputs: Any, batch: Any, batch_idx: int) -> None:
-        if self._check_frequency(trainer.global_step, 'score'):
-            self._log_score(pl_module, outputs)
+    def on_train_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        self.save_last_ckpt(trainer)
+
+    @rank_zero_only
+    def on_validation_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT,
+                                batch: Any, batch_idx: int, dataloader_idx: int = 0) -> None:
+        if self._check_frequency(trainer, 'img'):
+            self._log_samples(trainer, pl_module, outputs)
+            self.save_ckpt(trainer)
 
     @staticmethod
     def _log_score(pl_module: LightningModule, outputs: Dict[str, torch.Tensor]):
@@ -119,9 +131,10 @@ class PrecipDataLogger(Callback):
         gt = outputs['batch_dict']['precip_gt']
         config = pl_module.model_config
         s = pl_module.model_config.sampling.sampling_batch_size
-        sampling_null_condition = pl_module.sampling_null_condition
-        sample, n = pl_module.sampling_fn(pl_module.net, condition=condition[0:s],
-                                          w=config.model.w_guide, null_condition=sampling_null_condition)
+
+        # sample, n = pl_module.sampling_fn(pl_module.net, condition=condition[0:s],
+        #                                   w=config.model.w_guide, null_condition=sampling_null_condition)
+        sample = pl_module.sample(condition[0:s])
 
         if config.data.condition_mode == 1:
             # display condition and output in one grid
@@ -140,21 +153,22 @@ class PrecipDataLogger(Callback):
                 low_res_display = batch_dict['precip_up'].detach().clone()
         elif config.data.condition_mode in [4, 5]:
             low_res_display = batch_dict['precip_masked'].detach().clone()
-        low_res_display = low_res_display.to(config.device)
+        low_res_display = low_res_display.to(pl_module.device)
 
         low_res_display = self.rainfall_dataset.inverse_normalize_precip(low_res_display)
         sample = self.rainfall_dataset.inverse_normalize_precip(sample)
         gt = self.rainfall_dataset.inverse_normalize_precip(gt)
 
-        concat_samples = torch.cat(
-            (low_res_display[0:s, :, :, :], sample[0:s, :, :, :], gt[0:s, :, :, :]), dim=0)
-        grid = make_grid(concat_samples, nrow=s)
-        grid_mono = grid[0, :, :].unsqueeze(0)
-        cm_grid = cm_(grid_mono.detach().cpu(), vmin=0, vmax=max(low_res_display.max(), gt.max()))
-        images = wandb.Image(cm_grid, caption='conditional generation [rainfall / output / gt]')
-        wandb.log({"val/conditional_samples": images}) #, step=pl_module.global_step)
         self.log_conditional_samples_scaled(low_res_display, sample, gt, n=s)
 
+        # log sample metrics
+        if self.report_sample_metrics:
+            mae =  calc_mae(sample.cpu().detach().numpy(), gt[0:s, :, :, :].cpu().detach().numpy(), valid_mask=None, k=1,
+                            pooling_func='mean')
+            bias = calc_bias(sample.cpu().detach().numpy(), gt[0:s, :, :, :].cpu().detach().numpy(), valid_mask=None, k=1,
+                             pooling_func='mean')
+            wandb.log({'val/sample_mae': mae, 'val/sample_bias': bias, 'epoch': trainer.current_epoch})
+        
         self._revert_pbar_desc(pbar_taskid, original_pbar_desc)
         return
 
@@ -190,6 +204,19 @@ class PrecipDataLogger(Callback):
         wandb.log({"val/conditional_samples_scaled": images})
         return
 
+    def _check_frequency(self, trainer: "pl.trainer", key: str):
+        if self.freqs[key] == -1:
+            return False
+        if self.check_freq_via == 'global_step':
+            check_idx = trainer.global_step
+        elif self.check_freq_via == 'epoch':
+            check_idx = trainer.current_epoch
+        if check_idx >= self.next_log_idx[key]:
+            self.next_log_idx[key] = check_idx + self.freqs[key]
+            return True
+        else:
+            return False
+
     def _modify_pbar_desc(self):
         task_id, original_description = None, None
         # Ensure progress bar is active and tasks are initialized
@@ -213,4 +240,34 @@ class PrecipDataLogger(Callback):
                     # Update the description of the active validation progress bar
                     self.progress_bar.progress.update(task_id, description=original_description)
                     self.progress_bar.progress.refresh()
+        return
+
+
+    def save_ckpt(self, trainer: Trainer):
+        if self.enable_save_ckpt:
+            save_dir = trainer.logger.save_dir
+            ckpt_path = os.path.join(save_dir, 'checkpoints',
+                                     f'epoch_{trainer.current_epoch:03d}_step_{wandb.run.step:03d}.ckpt')
+            trainer.save_checkpoint(ckpt_path)
+            if self.add_reference_artifact: # Log the checkpoint as a reference artifact
+                artifact = wandb.Artifact(name=f'model-ckpt-{wandb.run.id}', type='model')
+                artifact.add_reference(f"file://{ckpt_path}")
+                artifact.metadata = {'epoch': trainer.current_epoch, 'step': wandb.run.step}
+                wandb.run.log_artifact(artifact, aliases=[f'epoch_{trainer.current_epoch:03d}',
+                                                          f'step_{wandb.run.step:03d}'])
+        return
+
+    def save_last_ckpt(self, trainer: Trainer):
+        if self.enable_save_ckpt:
+            save_dir = trainer.logger.save_dir
+            ckpt_path = os.path.join(save_dir, 'checkpoints', 'last.ckpt')
+            trainer.save_checkpoint(ckpt_path)
+
+    @staticmethod
+    def remove_image_file_from_summary():
+        # FIXME: this is not working...
+        for key in list(wandb.run.summary.keys()):
+            value = wandb.run.summary[key]
+            if isinstance(value, dict) and value.get('_type') == 'image-file':
+                del wandb.run.summary[key]
         return

@@ -96,7 +96,7 @@ class PrecipDataModule(LightningDataModule):
         if self.data_config.uniform_dequantization:
             raise NotImplementedError('Uniform dequantization not yet supported.')
 
-        if self.hparams.dataloader_mode in ['train', 'eval_set_random']:
+        if self.hparams.dataloader_mode in ['train', 'eval_set_random', 'train_det_val']:
             self.precip_dataset = DailyAggregateRainfallDataset(self.data_config)
             dataset_size = len(self.precip_dataset)
             indices = list(range(dataset_size))
@@ -104,12 +104,15 @@ class PrecipDataModule(LightningDataModule):
             train_indices, val_indices = indices[split:], indices[:split]
             generator = torch.Generator().manual_seed(self.hparams.seed)
             self.train_sampler = SubsetRandomSampler(train_indices, generator=generator)
-            self.val_sampler = SubsetRandomSampler(val_indices, generator=generator)
+            if self.hparams.dataloader_mode != 'train_det_val':
+                self.val_sampler = SubsetRandomSampler(val_indices, generator=generator)
+            else:
+                self.val_sampler = None # to be defined later
         elif self.hparams.dataloader_mode == 'specify_eval':
             self.precip_dataset = RainfallSpecifiedInference(self.data_config, self.hparams.specify_eval_targets)
         elif self.hparams.dataloader_mode == 'eval_set_deterministic':
             self.precip_dataset = PreSavedPrecipDataset(self.data_config, self.hparams.use_test_samples_from,
-                                                        self.hparams.stop_at_batch)
+                                                        self.hparams.stop_at_batch, stage='test')
         return
 
     def train_dataloader(self) -> DataLoader[Any]:
@@ -130,11 +133,21 @@ class PrecipDataModule(LightningDataModule):
 
         :return: The validation dataloader.
         """
-        self.val_loader = DataLoader(self.precip_dataset,
-                                     batch_size=self.hparams.batch_size,
-                                     timeout=3600,  # 120,
-                                     num_workers=self.hparams.num_workers,  # TODO: specify num_workers for val
-                                     sampler=self.val_sampler)
+        if self.hparams.dataloader_mode == 'train':
+            self.val_loader = DataLoader(self.precip_dataset,
+                                         batch_size=self.hparams.batch_size,
+                                         timeout=3600,  # 120,
+                                         num_workers=self.hparams.num_workers,  # TODO: specify num_workers for val
+                                         sampler=self.val_sampler)
+        elif self.hparams.dataloader_mode == 'train_det_val':
+            val_dataset = PreSavedPrecipDataset(self.data_config, self.hparams.use_val_samples_from,
+                                                stop_at_batch=None, stage='val')
+            self.val_loader = DataLoader(val_dataset,
+                                         batch_size=1,  # hard coded for now
+                                         timeout=0,
+                                         num_workers=4,
+                                         collate_fn=do_nothing_collate_fn)
+
         return self.val_loader
 
     def test_dataloader(self) -> DataLoader[Any]:

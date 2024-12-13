@@ -1,49 +1,50 @@
-__author__ = 'yuhao liu'
-
 import os
 import os.path as p
 from typing import Tuple, Dict, Hashable
 from hydra import compose, initialize
 import numpy as np
-import cv2
 import xarray as xr
 import torch
 from numpy import ndarray
 from torch.utils.data import Dataset, DataLoader, random_split, SubsetRandomSampler
 from natsort import natsorted
-from datetime import datetime
+import time
+import datetime as dt
 import re
 import pandas as pd
 from matplotlib import pyplot as plt
 from src.utils.helper import deprecated, yprint, rprint, InfiniteLoader, get_training_progressbar
 from src.utils.cpc_utils import read_cpc_file_from, read_cpc_gz_file_from, generate_mrms_dailyagg_12z
-import time
-import datetime as dt
+
+# FIXME: for debug only. Remove later
+from omegaconf import OmegaConf
+
+__author__ = 'yuhao liu'
 
 
-def get_precip_era5_dataset(config, eval_num_worker=None, eval_batch_size=None):
+def get_precip_era5_dataset(cfg, eval_num_worker=None, eval_batch_size=None):
     print('------ Dataset statistics -------')
-    if config.data.uniform_dequantization:
+    if cfg.data.data_config.uniform_dequantization:
         raise NotImplementedError('Uniform dequantization not yet supported.')
-    if config.mode != 'train':
-        raise NotImplementedError('Evaluation not yet supported.')
-    train_val_dataset = DailyAggregateRainfallDataset(config)
+    # if config.mode != 'train':
+    #     raise NotImplementedError('Evaluation not yet supported.')
+    train_val_dataset = DailyAggregateRainfallDataset(cfg.data.data_config)
     dataset_size = len(train_val_dataset)
     indices = list(range(dataset_size))
-    split = int(np.floor(config.data.train_val_split * dataset_size))
+    split = int(np.floor(cfg.data.train_val_split * dataset_size))
     train_indices, val_indices = indices[split:], indices[:split]
-    generator = torch.Generator().manual_seed(config.seed)
+    generator = torch.Generator().manual_seed(cfg.seed)
     train_sampler = SubsetRandomSampler(train_indices, generator=generator)
     val_sampler = SubsetRandomSampler(val_indices, generator=generator)
 
-    train_loader = DataLoader(train_val_dataset, batch_size=config.data.batch_size, # persistent_workers=True,
-                              timeout=3600, # 120,
-                              num_workers=config.hardware.num_workers, sampler=train_sampler)
+    train_loader = DataLoader(train_val_dataset, batch_size=cfg.data.batch_size,  # persistent_workers=True,
+                              timeout=0,  # 120,
+                              num_workers=cfg.data.num_workers, sampler=train_sampler)
                               # num_workers=0, sampler=train_sampler)
 
-    val_loader = DataLoader(train_val_dataset, batch_size=eval_batch_size if eval_batch_size is not None else config.data.batch_size,
-                            timeout=3600, # 120,
-                            num_workers=eval_num_worker if eval_num_worker is not None else config.hardware.num_workers,
+    val_loader = DataLoader(train_val_dataset, batch_size=eval_batch_size if eval_batch_size is not None else cfg.data.batch_size,
+                            timeout=0,  # 120,
+                            num_workers=eval_num_worker if eval_num_worker is not None else cfg.data.num_workers,
                             sampler=val_sampler)
     print('Split dataset into {} training samples and {} validation samples'
           .format(len(train_indices), len(val_indices)))
@@ -214,7 +215,7 @@ class DailyAggregateRainfallDataset(Dataset):
             self.loc_bounds['lat_max'] < lat < self.loc_bounds['lat_min']
 
     """data loading methods"""
-
+    # @profile  # Decorator from line_profiler
     def __getitem__(self, item):
         date_ = self.precip_dates[item]
         cpc_lr = self.read_cpc_daily_aggregate(date_)
@@ -361,7 +362,6 @@ class DailyAggregateRainfallDataset(Dataset):
         mrms_day = mrms_day.sum(dim='time', min_count=23)
         return mrms_day
 
-
     def read_precomputed_mrms_daily_aggregate(self, date_: str) -> xr.DataArray:
         mrms_day = xr.open_dataarray(p.join(self.mrms_path, f'mrms_daily_{date_}.nc'))
         return mrms_day
@@ -434,8 +434,9 @@ class DailyAggregateRainfallDataset(Dataset):
         ds['cpc'] = ds['cpc'].where(valid_mask)
         return ds
 
+    # @profile  # Decorator from line_profiler
     def merge_all_dataarrays(self, cpc: xr.DataArray, mrms: xr.DataArray, era5: dict, density: xr.DataArray = None,
-                             date_: str = None) -> xr.Dataset:
+                             date_: str = None) -> Tuple[xr.Dataset, xr.DataArray]:
         """
         Merges the daily aggregate precipitation data from CPC and MRMS datasets.
         * Defines mutually valid region (where both precip products have valid data)
@@ -448,7 +449,8 @@ class DailyAggregateRainfallDataset(Dataset):
             cpc_interp = self.read_precomputed_cpc_daily_aggregate(date_)
         else:
             cpc_interp = cpc.interp(lon=mrms.lon, lat=mrms.lat, method='linear')
-        valid_mask = np.logical_and(np.isfinite(mrms), np.isfinite(cpc_interp))
+        # valid_mask = np.logical_and(np.isfinite(mrms), np.isfinite(cpc_interp)) # slow
+        valid_mask = mrms.notnull() & cpc_interp.notnull() # optimized
         if density is not None:
             if self.use_precomputed_cpc:
                 density_interp = self.read_precomputed_cpc_gauge_data(date_)
@@ -458,8 +460,6 @@ class DailyAggregateRainfallDataset(Dataset):
         if self.use_precomputed_era5:
             era5_merged = era5
         else:
-            # for k, v in era5.items():
-            #     era5[k] = v.interp(lon=mrms.lon, lat=mrms.lat, method='linear')
             era5_merged = xr.Dataset(era5)
             era5_merged = era5_merged.interp(lon=mrms.lon, lat=mrms.lat, method='linear')
 
@@ -950,22 +950,26 @@ class DailyAggregateRainfallDataset(Dataset):
         return xarray_batch
 
 
-def debug_dataloader(config):
+def debug_dataloader(cfg):
     """
     Checks run time
     """
-    batch_size = 12
-    config.hardware.num_workers = 16
-    config.data.batch_size = batch_size
-    config.data.use_precomputed_cpc = True
-    train_loader, eval_loader, dateset = get_precip_era5_dataset(config, eval_num_worker=config.hardware.num_workers)
+    batch_size = 6 # 12
+    cfg.data.num_workers = 6
+    cfg.data.batch_size = batch_size
+    # cfg.data.data_config.use_precomputed_cpc = True
+    OmegaConf.set_struct(cfg, False)
+
+    cfg.data.train_val_split = 0.8
+    cfg.seed = 42
+    train_loader, eval_loader, dateset = get_precip_era5_dataset(cfg, eval_num_worker=cfg.data.num_workers)
     train_iter = iter(train_loader)
     eval_iter = iter(eval_loader)
 
     progress = get_training_progressbar()
-    total_ = 10
+    total_ = 30
     with progress:
-        task = progress.add_task(f"Generating validation inputs", total=total_, start=True)
+        task = progress.add_task(f"[Debug] Generating validation inputs", total=total_, start=True)
         start_time = time.monotonic()
         for step in range(total_):
             try:
@@ -983,6 +987,6 @@ def debug_dataloader(config):
 
 
 if __name__ == '__main__':
-    with initialize(version_base=None, config_path="../configs", job_name="evaluation"):
-        config = compose(config_name="downscale_cpc_density")
-        debug_dataloader(config)
+    with initialize(version_base=None, config_path="../../configs", job_name="evaluation"):
+        config = compose(config_name="train")
+    debug_dataloader(config)
