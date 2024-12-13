@@ -364,7 +364,7 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
                         w_end = w_end_sf // sf
 
                         pch_condition = condition[:, :, h_start:h_end, w_start:w_end]
-                        pch_null_condition = torch.ones_like(pch_condition) * null
+                        pch_null_condition = null_condition[:, :, h_start:h_end, w_start:w_end]
 
                         # Append patches to lists
                         pch_x_list.append(pch_x)
@@ -390,8 +390,8 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
 
                             # Update the merged image with the processed patches
                             for idx_in_batch, (h_start_sf, h_end_sf, w_start_sf, w_end_sf) in enumerate(batch_idx_info):
-                                pch_x_i_mean = batch_pch_x_mean[idx_in_batch:idx_in_batch + 1]
                                 if i == sde.N - 1:
+                                    pch_x_i_mean = batch_pch_x_mean[idx_in_batch:idx_in_batch + 1]
                                     im_spliter.update_gaussian(pch_x_i_mean,
                                                                (h_start_sf, h_end_sf, w_start_sf, w_end_sf))
                                 else:
@@ -420,8 +420,8 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
 
                         # Update the merged image with the processed patches
                         for idx_in_batch, (h_start_sf, h_end_sf, w_start_sf, w_end_sf) in enumerate(batch_idx_info):
-                            pch_x_i_mean = batch_pch_x_mean[idx_in_batch:idx_in_batch + 1]
                             if i == sde.N - 1:
+                                pch_x_i_mean = batch_pch_x_mean[idx_in_batch:idx_in_batch + 1]
                                 im_spliter.update_gaussian(pch_x_i_mean, (h_start_sf, h_end_sf, w_start_sf, w_end_sf))
                             else:
                                 pch_x_i = batch_pch_x[idx_in_batch:idx_in_batch + 1]
