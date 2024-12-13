@@ -325,14 +325,13 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
     projector_upsample_update_fn = get_upsample_update_fn(predictor_update_fn)
     corrector_upsample_update_fn = get_upsample_update_fn(corrector_update_fn)
 
-    def pc_upsampler(model, condition, w, out_dim, save_dir=None, null_condition=None, display_pbar=False, gt=None,
-                     null=None):
-        # EMD (Empirical Model Decomposition)
+    def pc_upsampler(model, condition, w, out_dim, save_dir=None, null_condition=None, display_pbar=False, gt=None, null= None):
+        # emd
         discrete_sigmas = torch.exp(torch.linspace(np.log(0.01), np.log(50), 1000))
         smld_sigma_array = torch.flip(discrete_sigmas, dims=(0,))
 
         with torch.no_grad():
-            # Initial sample: x is the full image
+            # Initial sample: x is the full image (512x512)
             x = sde.prior_sampling(out_dim).to(condition.device)
             noise = x.clone()
             timesteps = torch.linspace(sde.T, eps, sde.N)
@@ -341,7 +340,7 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
                 patch_size = 256  # Patch size
                 stride = 192  # Stride (overlap between patches)
                 sf = 1
-                batch_size = 3  # Batch size for processing patches
+                batch_size = 12 # Batch size for processing patches
 
                 for i in track(range(sde.N), description=f'Sampling {sde.N} steps....', refresh_per_second=1):
                     t = timesteps[i]
@@ -354,6 +353,7 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
                     pch_null_condition_list = []
                     idx_info_list = []
 
+
                     # Iterate over patches
                     for pch_x, (h_start_sf, h_end_sf, w_start_sf, w_end_sf) in im_spliter:
                         # Extract the conditioning patch
@@ -362,8 +362,9 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
                         w_start = w_start_sf // sf
                         w_end = w_end_sf // sf
 
+                        pch_x = x[:, :, h_start:h_end, w_start:w_end]
                         pch_condition = condition[:, :, h_start:h_end, w_start:w_end]
-                        pch_null_condition = torch.ones_like(pch_condition) * null
+                        pch_null_condition = null_condition[:, :, h_start:h_end, w_start:w_end]
 
                         # Append patches to lists
                         pch_x_list.append(pch_x)
@@ -389,8 +390,8 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
 
                             # Update the merged image with the processed patches
                             for idx_in_batch, (h_start_sf, h_end_sf, w_start_sf, w_end_sf) in enumerate(batch_idx_info):
-                                pch_x_i_mean = batch_pch_x_mean[idx_in_batch:idx_in_batch + 1]
                                 if i == sde.N - 1:
+                                    pch_x_i_mean = batch_pch_x_mean[idx_in_batch:idx_in_batch + 1]
                                     im_spliter.update_gaussian(pch_x_i_mean,
                                                                (h_start_sf, h_end_sf, w_start_sf, w_end_sf))
                                 else:
@@ -400,7 +401,6 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
                             # Reset lists for next batch
                             pch_x_list = []
                             pch_condition_list = []
-                            pch_null_condition_list = []
                             idx_info_list = []
 
                     # Process any remaining patches
@@ -419,8 +419,8 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
 
                         # Update the merged image with the processed patches
                         for idx_in_batch, (h_start_sf, h_end_sf, w_start_sf, w_end_sf) in enumerate(batch_idx_info):
-                            pch_x_i_mean = batch_pch_x_mean[idx_in_batch:idx_in_batch + 1]
                             if i == sde.N - 1:
+                                pch_x_i_mean = batch_pch_x_mean[idx_in_batch:idx_in_batch + 1]
                                 im_spliter.update_gaussian(pch_x_i_mean, (h_start_sf, h_end_sf, w_start_sf, w_end_sf))
                             else:
                                 pch_x_i = batch_pch_x[idx_in_batch:idx_in_batch + 1]
@@ -431,32 +431,32 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
 
                     if i % 5 == 0:
                         sigmas = smld_sigma_array.to(x.device)[i]
-                        # perturbed_gt = gt + (noise * (sigmas / 50))
-                        # emd = sliced_wasserstein_distance(x[0, :, :, :].clone().float(), perturbed_gt[0, :, :, :])
-                        # plt.imshow(x[0, :, :, :].cpu().numpy().transpose(1, 2, 0))
-                        # # plt.title(f'progress, i = {i}, mean = {x[0, :, :, :].mean():.2f}, EMD = {emd:.2f}')
-                        # # plt.colorbar()
-                        # # plt.show()
-                        # plt.axis('off')  # Turn off the axis, ticks, and labels
-                        # plt.xticks([])  # Disable x ticks
-                        # plt.yticks([])  # Disable y ticks
-                        # plt.savefig(f'/home/yl241/workspace/NCSN/plt/progression_{i}.png', bbox_inches='tight', pad_inches=0, dpi=300)
-                        # plt.close()
-                        # calculate mean , preserve 0th axis
-                        # mean = x.mean(dim=(1,2,3))
-                        # print(f'progress, i = {i}, mean = {mean.detach().cpu().numpy()}')
-                        # print(f'{list(mean.detach().cpu().numpy())},')
-                        # write to file
-                        # with open(f'/home/yl241/data/rainfall_eval/general/sde_trajectory.txt', 'a') as f:
-                        #     f.write(f'{list(mean.detach().cpu().numpy())},\n')
+                            # perturbed_gt = gt + (noise * (sigmas / 50))
+                            # emd = sliced_wasserstein_distance(x[0, :, :, :].clone().float(), perturbed_gt[0, :, :, :])
+                            # plt.imshow(x[0, :, :, :].cpu().numpy().transpose(1, 2, 0))
+                            # # plt.title(f'progress, i = {i}, mean = {x[0, :, :, :].mean():.2f}, EMD = {emd:.2f}')
+                            # # plt.colorbar()
+                            # # plt.show()
+                            # plt.axis('off')  # Turn off the axis, ticks, and labels
+                            # plt.xticks([])  # Disable x ticks
+                            # plt.yticks([])  # Disable y ticks
+                            # plt.savefig(f'/home/yl241/workspace/NCSN/plt/progression_{i}.png', bbox_inches='tight', pad_inches=0, dpi=300)
+                            # plt.close()
+                            # calculate mean , preserve 0th axis
+                            # mean = x.mean(dim=(1,2,3))
+                            # print(f'progress, i = {i}, mean = {mean.detach().cpu().numpy()}')
+                            # print(f'{list(mean.detach().cpu().numpy())},')
+                            # write to file
+                            # with open(f'/home/yl241/data/rainfall_eval/general/sde_trajectory.txt', 'a') as f:
+                            #     f.write(f'{list(mean.detach().cpu().numpy())},\n')
 
             else:
-                for i in range(sde.N):
-                    t = timesteps[i]
-                    x, x_mean = corrector_upsample_update_fn(model, x=x, t=t, c=condition, w=w,
-                                                             null_cond=null_condition)
-                    x, x_mean = projector_upsample_update_fn(model, x=x, t=t, c=condition, w=w,
-                                                             null_cond=null_condition)
+                    for i in range(sde.N):
+                        t = timesteps[i]
+                        x, x_mean = corrector_upsample_update_fn(model, x=x, t=t, c=condition, w=w,
+                                                                 null_cond=null_condition)
+                        x, x_mean = projector_upsample_update_fn(model, x=x, t=t, c=condition, w=w,
+                                                                 null_cond=null_condition)
 
             return inverse_scaler(x)
 

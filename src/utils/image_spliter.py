@@ -150,7 +150,31 @@ class ImageSpliterTh:
         weights_tensor = torch.tensor(weights, device=device).unsqueeze(0).unsqueeze(0)  # Shape: (1, 1, tile_height, tile_width)
         weights_tensor = weights_tensor.repeat(nbatches, self.chn, 1,1)  # Shape: (nbatches, chn, tile_height, tile_width)
         return weights_tensor
-    # dynamic gaussian weight tensor
+    #
+    # def _gaussian_weights(self, tile_width, tile_height, nbatches, device, var=0.005):
+    #     """Generates a normalized Gaussian mask of weights for tile contributions."""
+    #     from math import exp, sqrt, pi
+    #     import numpy as np
+    #     # Compute midpoints
+    #     midpoint_x = (tile_width - 1) / 2
+    #     midpoint_y = (tile_height - 1) / 2
+    #
+    #     # Compute x and y Gaussian probabilities
+    #     x_probs = [exp(-((x - midpoint_x) ** 2) / (2 * var)) for x in range(tile_width)]
+    #     y_probs = [exp(-((y - midpoint_y) ** 2) / (2 * var)) for y in range(tile_height)]
+    #
+    #     # Create 2D Gaussian weights
+    #     weights = np.outer(y_probs, x_probs)
+    #
+    #     # Normalize weights so that the sum is 1
+    #     weights /= weights.sum()
+    #
+    #     # Convert to torch tensor and reshape
+    #     weights_tensor = torch.tensor(weights, device=device, dtype=torch.float32).unsqueeze(0).unsqueeze(
+    #         0)  # Shape: (1, 1, tile_height, tile_width)
+    #     weights_tensor = weights_tensor.repeat(nbatches, self.chn, 1,1)  # Shape: (nbatches, chn, tile_height, tile_width)
+    #
+    #     return weights_tensor
 
     def update(self, pch_res, index_infos):
         '''
@@ -163,6 +187,7 @@ class ImageSpliterTh:
             h_start, h_end = self.h_start, self.h_end
         else:
             h_start, h_end, w_start, w_end = index_infos
+
 
         self.im_res[:, :, h_start:h_end, w_start:w_end] += pch_res
         self.pixel_count[:, :, h_start:h_end, w_start:w_end] += 1
@@ -178,6 +203,13 @@ class ImageSpliterTh:
             h_start, h_end = self.h_start, self.h_end
         else:
             h_start, h_end, w_start, w_end = index_infos
+
+        #     # Check if it's an edge patch
+        # is_edge = (h_start == 0 or h_end == self.im_res.shape[2] or
+        #                w_start == 0 or w_end == self.im_res.shape[3])
+        # mask_weight = 1.4 if is_edge else 1.0  # Adjust weight for edge patches
+
+        self.weight /= self.weight.sum()
 
         self.im_res[:, :, h_start:h_end, w_start:w_end] += pch_res * self.weight
         self.pixel_count[:, :, h_start:h_end, w_start:w_end] += self.weight
