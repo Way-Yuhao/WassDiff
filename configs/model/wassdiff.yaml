@@ -20,9 +20,10 @@ optimizer_config:
     grad_clip: 1.0
 
 tiled_config:
-  pch_size: 256
-  stride: 64
-  sf: 1
+  patch_size: 256  # Patch size
+  stride: 192  # Stride (overlap between patches)
+  batch_size: 12  # Batch size for processing patches
+  sf: 1 # DO NOT MODIFY
 
 
 #scheduler:

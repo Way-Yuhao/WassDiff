@@ -363,6 +363,7 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
                         w_start = w_start_sf // sf
                         w_end = w_end_sf // sf
 
+                        #pch_x = x[:, :, h_start:h_end, w_start:w_end] image spliter has done this
                         pch_condition = condition[:, :, h_start:h_end, w_start:w_end]
                         pch_null_condition = null_condition[:, :, h_start:h_end, w_start:w_end]
 

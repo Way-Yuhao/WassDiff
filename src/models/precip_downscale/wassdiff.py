@@ -261,38 +261,20 @@ class WassDiffLitModule(LightningModule):
         if self.hparams.bypass_sampling:
             batch_dict['precip_output'] = torch.zeros_like(gt)
         else:
-            if self.tiled_diffusion:
-                x = self.pc_upsampler(self.net, self.scaler(condition), w=self.model_config.model.w_guide,
-                                      out_dim=(batch_size, 1, self.model_config.data.image_size,
-                                               self.model_config.data.image_size),
-                                      save_dir=None, null_condition=null_condition, gt=gt,
-                                      display_pbar=self.hparams.display_sampling_pbar,
-                                      null=self.model_config.model.null_token)
-                if self.hparams.num_samples == 1:
+            x = self.pc_upsampler(self.net, self.scaler(condition), w=self.model_config.model.w_guide,
+                                  out_dim=(batch_size, 1, self.model_config.data.image_size, self.model_config.data.image_size),
+                                  save_dir=None, null_condition=null_condition, gt=gt,
+                                  display_pbar=self.hparams.display_sampling_pbar)
+            if self.hparams.num_samples == 1:
                     # print dimension
                     batch_dict['precip_output'] = x
-                else:
-                    for i in range(self.hparams.num_samples):
-                        batch_dict['precip_output_' + str(i)] = x[i, :, :, :]
-                    # print(batch_dict)
-                    # print(batch_coords)
-                    # print(xr_low_res_batch)
-                    # print(valid_mask)
             else:
-                x = self.pc_upsampler(self.net, self.scaler(condition), w=self.model_config.model.w_guide,
-                                          out_dim=(batch_size, 1, self.model_config.data.image_size, self.model_config.data.image_size),
-                                          save_dir=None, null_condition=null_condition, gt=gt,
-                                          display_pbar=self.hparams.display_sampling_pbar, null = self.model_config.model.null_token)
-                if self.hparams.num_samples == 1:
-                        # print dimension
-                        batch_dict['precip_output'] = x
-                else:
-                    for i in range(self.hparams.num_samples):
-                        batch_dict['precip_output_' + str(i)] = x[i, :, :, :]
-                    # print(batch_dict)
-                    # print(batch_coords)
-                    # print(xr_low_res_batch)
-                    # print(valid_mask)
+                for i in range(self.hparams.num_samples):
+                    batch_dict['precip_output_' + str(i)] = x[i, :, :, :]
+                # print(batch_dict)
+                # print(batch_coords)
+                # print(xr_low_res_batch)
+                # print(valid_mask)
             return {'batch_dict': batch_dict, 'batch_coords': batch_coords, 'xr_low_res_batch': xr_low_res_batch,
                     'valid_mask': valid_mask}
 
