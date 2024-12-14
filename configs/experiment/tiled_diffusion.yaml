@@ -3,5 +3,8 @@ model:
   tiled_config:
     patch_size: 256  # Patch size
     stride: 192  # Stride (overlap between patches)
-    batch_size: 12  # Batch size for processing patches
+    batch_size: 36  # Batch size for processing patches
     sf: 1 # DO NOT MODIFY
+data:
+  image_size: 512 # size of high-resolution image
+  condition_size: 512 # size of low-resolution image
