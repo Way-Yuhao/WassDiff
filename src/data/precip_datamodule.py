@@ -157,13 +157,17 @@ class PrecipDataModule(LightningDataModule):
         """
         assert self.hparams.dataloader_mode in ['specify_eval', 'eval_set_random', 'eval_set_deterministic']
         if self.hparams.dataloader_mode == 'specify_eval':
-            self.test_loader = DataLoader(self.precip_dataset,
-                                          batch_size=1,
-                                          timeout=0,
-                                          num_workers=1,
-                                          collate_fn=xarray_collate_fn)
+            self.val_loader = DataLoader(self.precip_dataset,
+                                         batch_size=self.hparams.batch_size,
+                                         timeout=3600,  # 120,
+                                         num_workers=self.hparams.num_workers,
+                                         sampler=self.val_sampler)
         elif self.hparams.dataloader_mode == 'eval_set_random':
-            raise NotImplementedError()
+            self.test_loader = DataLoader(self.precip_dataset,
+                                          batch_size=self.hparams.batch_size,
+                                          num_workers=self.hparams.num_workers,
+                                          timeout=0,
+                                          collate_fn=do_nothing_collate_fn)
         else:
             self.test_loader = DataLoader(self.precip_dataset,
                                           batch_size=1,  # hard coded for now
