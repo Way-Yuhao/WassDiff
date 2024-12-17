@@ -22,7 +22,7 @@ Instructions on how to obtain required training and validation data:
 ### CPC Unified Gauge-Based Analysis of Daily Precipitation
 Navigate to https://psl.noaa.gov/data/gridded/data.cpc.globalprecip.html, download `.nc` under precipitation.
 Choose appropriate years.
-The gauge density files are stored seperately on NOAA's FTP server: https://ftp.cpc.ncep.noaa.gov/precip/CPC_UNI_PRCP/.
+The gauge density files are stored separately on NOAA's FTP server: https://ftp.cpc.ncep.noaa.gov/precip/CPC_UNI_PRCP/.
 Download `.gz` files from https://ftp.cpc.ncep.noaa.gov/precip/CPC_UNI_PRCP/GAUGE_CONUS/RT/
 
 ### ERA5 and MRMS
