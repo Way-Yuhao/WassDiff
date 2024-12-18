@@ -1,0 +1,10 @@
+python ./src/eval.py trainer.devices=[2] experiment=eval_val_set_conformal model.compile=false name=wassdiff_conformal_20;
+python ./src/eval.py trainer.devices=[2] experiment=eval_val_set_conformal model.compile=false name=wassdiff_conformal_21;
+python ./src/eval.py trainer.devices=[2] experiment=eval_val_set_conformal model.compile=false name=wassdiff_conformal_22;
+python ./src/eval.py trainer.devices=[2] experiment=eval_val_set_conformal model.compile=false name=wassdiff_conformal_23;
+python ./src/eval.py trainer.devices=[2] experiment=eval_val_set_conformal model.compile=false name=wassdiff_conformal_24;
+python ./src/eval.py trainer.devices=[2] experiment=eval_val_set_conformal model.compile=false name=wassdiff_conformal_25;
+python ./src/eval.py trainer.devices=[2] experiment=eval_val_set_conformal model.compile=false name=wassdiff_conformal_26;
+python ./src/eval.py trainer.devices=[2] experiment=eval_val_set_conformal model.compile=false name=wassdiff_conformal_27;
+python ./src/eval.py trainer.devices=[2] experiment=eval_val_set_conformal model.compile=false name=wassdiff_conformal_28;
+python ./src/eval.py trainer.devices=[2] experiment=eval_val_set_conformal model.compile=false name=wassdiff_conformal_29;

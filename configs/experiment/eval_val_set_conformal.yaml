@@ -11,9 +11,10 @@ data:
   data_config:
     image_size: 256
 
-#callbacks:
-#  eval_on_dataset:
+callbacks:
+  eval_on_dataset:
 #    eval_only_on_existing: true
+    report_results_on_batch: null
 
 paths:
   output_dir:  ${local.eval_set_root_dir}/${name}
