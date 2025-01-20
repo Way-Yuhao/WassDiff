@@ -1,5 +1,5 @@
-python ./src/eval.py trainer.devices=[0] experiment=eval_val_set_conformal model.compile=false name=wassdiff_conformal_10;
-python ./src/eval.py trainer.devices=[0] experiment=eval_val_set_conformal model.compile=false name=wassdiff_conformal_11;
+#python ./src/eval.py trainer.devices=[0] experiment=eval_val_set_conformal model.compile=false name=wassdiff_conformal_10;
+#python ./src/eval.py trainer.devices=[0] experiment=eval_val_set_conformal model.compile=false name=wassdiff_conformal_11;
 python ./src/eval.py trainer.devices=[0] experiment=eval_val_set_conformal model.compile=false name=wassdiff_conformal_12;
 python ./src/eval.py trainer.devices=[0] experiment=eval_val_set_conformal model.compile=false name=wassdiff_conformal_13;
 python ./src/eval.py trainer.devices=[0] experiment=eval_val_set_conformal model.compile=false name=wassdiff_conformal_14;
