@@ -1,0 +1,31 @@
+# @package _global_
+
+defaults:
+  - override /model: baseline_corrdiff_regression_mini
+  - _self_
+
+logger:
+  wandb:
+    project: "WassDiff-Baselines"
+    name: 'CorrDiff Regression Mini'
+
+callbacks:
+  log_precip_data:
+    train_log_score_freq: -1  # step_fn does not return loss_dict
+    show_samples_at_start: true
+
+data:
+  ######## det eval ########
+  use_val_samples_from: ${paths.data_dir}/rainfall_eval/val_det_samples_256
+  dataloader_mode: train_det_val
+  ##########################
+  data_config:
+    image_size: 256 # size of high-resolution image
+    condition_size: 256 # size of low-resolution image
+  batch_size: 12
+  num_workers: 12
+
+#trainer:
+#  limit_train_batches: 2  # debug
+#  limit_val_batches: 10 # debug
+#  check_val_every_n_epoch: 1  # debug
