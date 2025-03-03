@@ -13,8 +13,6 @@ from omegaconf import OmegaConf
 __author__ = 'yuhao liu'
 
 
-
-
 class RainfallDatasetCONUS(DailyAggregateRainfallDataset):
     """
     Precipitation dataset, without cropping.
@@ -81,43 +79,3 @@ class RainfallDatasetCONUS(DailyAggregateRainfallDataset):
         }
 
         return batch, crop_coords
-
-def debug_dataloader(cfg):
-    """
-    Checks run time
-    """
-    batch_size = 1
-    cfg.data.num_workers = 1
-    cfg.data.batch_size = batch_size
-    # cfg.data.data_config.use_precomputed_cpc = True
-    OmegaConf.set_struct(cfg, False)
-
-    cfg.data.train_val_split = 0.8
-    cfg.seed = 42
-    train_loader, eval_loader, dateset = get_precip_era5_dataset(cfg, eval_num_worker=cfg.data.num_workers)
-    train_iter = iter(train_loader)
-    eval_iter = iter(eval_loader)
-
-    progress = get_training_progressbar()
-    total_ = 30
-    with progress:
-        task = progress.add_task(f"[Debug] Generating validation inputs", total=total_, start=True)
-        start_time = time.monotonic()
-        for step in range(total_):
-            try:
-                batch_dict, batch_coord = next(train_iter)
-                # save batch_dict and batch_coord
-                progress.update(task, advance=1)
-
-            except RuntimeError:
-                print("Timeout error occurred. Skipping this batch.")
-                continue
-        yprint('---------------------------------')
-        stop_time = time.monotonic()
-        yprint(f'Processing time = {dt.timedelta(seconds=stop_time - start_time)}')
-    return
-
-if __name__ == '__main__':
-    with initialize(version_base=None, config_path="../../configs", job_name="debug_tiled_data"):
-        config = compose(config_name="eval", overrides=["+data.dataloader_mode=eval_entire_conus"])
-    debug_dataloader(config)
