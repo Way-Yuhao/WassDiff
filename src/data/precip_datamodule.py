@@ -212,18 +212,20 @@ if __name__ == "__main__":
     with initialize(version_base=None, config_path="../../configs/", job_name="evaluation"):
         # config = compose(config_name="cpc_mrms_data")
         config = compose(config_name="eval")
-    data_module = PrecipDataModule(config.data.data_config, dataloader_mode='eval_entire_conus')
-    # train
-    # data_module.setup(stage="fit")
-    # train_loader = data_module.train_dataloader()
-    # print(f"Train DataLoader initialized with {len(train_loader)} batches.")
-    # # Get the first batch
-    # first_batch = next(iter(train_loader))
-    # print(f"First batch: {first_batch}")
-    # eval
-    data_module.setup(stage="test")
-    test_loader = data_module.test_dataloader()
-    print(f"Test DataLoader initialized with {len(test_loader)} batches.")
+
+    ## train
+    data_module = PrecipDataModule(config.data.data_config)
+    data_module.setup(stage="fit")
+    train_loader = data_module.train_dataloader()
+    print(f"Train DataLoader initialized with {len(train_loader)} batches.")
     # Get the first batch
-    first_batch = next(iter(test_loader))
+    first_batch = next(iter(train_loader))
     print(f"First batch: {first_batch}")
+    ## eval
+    # data_module = PrecipDataModule(config.data.data_config, dataloader_mode='eval_entire_conus')
+    # data_module.setup(stage="test")
+    # test_loader = data_module.test_dataloader()
+    # print(f"Test DataLoader initialized with {len(test_loader)} batches.")
+    # # Get the first batch
+    # first_batch = next(iter(test_loader))
+    # print(f"First batch: {first_batch}")
