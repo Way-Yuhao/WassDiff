@@ -7,6 +7,7 @@ from hydra import compose, initialize
 from src.data.cpc_mrms_dataset import DailyAggregateRainfallDataset
 from src.data.precip_dataloader_inference import (RainfallSpecifiedInference, PreSavedPrecipDataset,
                                                   xarray_collate_fn, do_nothing_collate_fn)
+from src.data.cpc_mrms_dataset_tiled import RainfallDatasetCONUS
 
 
 class PrecipDataModule(LightningDataModule):
@@ -53,6 +54,12 @@ class PrecipDataModule(LightningDataModule):
         :param batch_size: The batch size. Defaults to `64`.
         :param num_workers: The number of workers. Defaults to `0`.
         :param pin_memory: Whether to pin memory. Defaults to `False`.
+        :param seed: The random seed. Defaults to `42`.
+        :param dataloader_mode: The dataloader mode. Defaults to `train`.
+            Other options:
+            - for fit: 'train', 'train_det_val'
+            - for test: 'specify_eval', 'eval_set_deterministic', 'eval_entire_conus'
+        :param args: Additional positional arguments.
         """
         super().__init__()
 
@@ -113,6 +120,10 @@ class PrecipDataModule(LightningDataModule):
         elif self.hparams.dataloader_mode == 'eval_set_deterministic':
             self.precip_dataset = PreSavedPrecipDataset(self.data_config, self.hparams.use_test_samples_from,
                                                         self.hparams.stop_at_batch, stage='test')
+        elif self.hparams.dataloader_mode == 'eval_entire_conus':
+            self.precip_dataset = RainfallDatasetCONUS(self.data_config)
+        else:
+            raise ValueError(f"Unknown dataloader mode: {self.hparams.dataloader_mode}")
         return
 
     def train_dataloader(self) -> DataLoader[Any]:
@@ -155,22 +166,20 @@ class PrecipDataModule(LightningDataModule):
 
         :return: The test dataloader.
         """
-        assert self.hparams.dataloader_mode in ['specify_eval', 'eval_set_random', 'eval_set_deterministic']
-        if self.hparams.dataloader_mode == 'specify_eval':
-            self.test_loader = DataLoader(self.precip_dataset,
-                                          batch_size=1,
-                                          timeout=0,
-                                          num_workers=1,
-                                          collate_fn=xarray_collate_fn)
-        elif self.hparams.dataloader_mode == 'eval_set_random':
-            raise NotImplementedError()
-        else:
-            self.test_loader = DataLoader(self.precip_dataset,
-                                          batch_size=1,  # hard coded for now
-                                          timeout=0,
-                                          num_workers=1,
-                                          collate_fn=do_nothing_collate_fn)
+        mode = self.hparams.dataloader_mode
+        # only allow the following modes
+        collate_fns = {'specify_eval': xarray_collate_fn,
+                       'eval_entire_conus': xarray_collate_fn,
+                       'eval_set_deterministic': do_nothing_collate_fn, # pre-saved tensor itself with a batch_size >= 1
+                       }
+        if mode not in collate_fns:
+            raise ValueError(f"Unknown dataloader mode: {mode}")
 
+        self.test_loader = DataLoader(self.precip_dataset,
+                                      batch_size=1,
+                                      timeout=0,
+                                      num_workers=1,
+                                      collate_fn=collate_fns[mode])
         return self.test_loader
 
     def teardown(self, stage: Optional[str] = None) -> None:
@@ -200,12 +209,21 @@ class PrecipDataModule(LightningDataModule):
 
 if __name__ == "__main__":
     # debug
-    with initialize(version_base=None, config_path="../../configs/data", job_name="evaluation"):
-        config = compose(config_name="cpc_mrms_data")
-    data_module = PrecipDataModule(config.data)
-    data_module.setup(stage="fit")
-    train_loader = data_module.train_dataloader()
-    print(f"Train DataLoader initialized with {len(train_loader)} batches.")
+    with initialize(version_base=None, config_path="../../configs/", job_name="evaluation"):
+        # config = compose(config_name="cpc_mrms_data")
+        config = compose(config_name="eval")
+    data_module = PrecipDataModule(config.data.data_config, dataloader_mode='eval_entire_conus')
+    # train
+    # data_module.setup(stage="fit")
+    # train_loader = data_module.train_dataloader()
+    # print(f"Train DataLoader initialized with {len(train_loader)} batches.")
+    # # Get the first batch
+    # first_batch = next(iter(train_loader))
+    # print(f"First batch: {first_batch}")
+    # eval
+    data_module.setup(stage="test")
+    test_loader = data_module.test_dataloader()
+    print(f"Test DataLoader initialized with {len(test_loader)} batches.")
     # Get the first batch
-    first_batch = next(iter(train_loader))
+    first_batch = next(iter(test_loader))
     print(f"First batch: {first_batch}")
