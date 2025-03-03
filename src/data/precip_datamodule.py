@@ -4,10 +4,12 @@ import torch
 from lightning import LightningDataModule
 from torch.utils.data import ConcatDataset, DataLoader, Dataset, random_split, SubsetRandomSampler
 from hydra import compose, initialize
+from omegaconf import OmegaConf
+from omegaconf.listconfig import ListConfig
 from src.data.cpc_mrms_dataset import DailyAggregateRainfallDataset
 from src.data.precip_dataloader_inference import (RainfallSpecifiedInference, PreSavedPrecipDataset,
                                                   xarray_collate_fn, do_nothing_collate_fn)
-from src.data.cpc_mrms_dataset_tiled import RainfallDatasetCONUS
+from src.data.cpc_mrms_dataset_tiled import RainfallDatasetCONUS, RainfallDatasetNonSquare
 
 
 class PrecipDataModule(LightningDataModule):
@@ -58,7 +60,7 @@ class PrecipDataModule(LightningDataModule):
         :param dataloader_mode: The dataloader mode. Defaults to `train`.
             Other options:
             - for fit: 'train', 'train_det_val'
-            - for test: 'specify_eval', 'eval_set_deterministic', 'eval_entire_conus'
+            - for test: 'specify_eval', 'eval_set_deterministic'
         :param args: Additional positional arguments.
         """
         super().__init__()
@@ -99,7 +101,6 @@ class PrecipDataModule(LightningDataModule):
 
         :param stage: The stage to setup. Either `"fit"`, `"validate"`, `"test"`, or `"predict"`. Defaults to ``None``.
         """
-
         if self.data_config.uniform_dequantization:
             raise NotImplementedError('Uniform dequantization not yet supported.')
 
@@ -116,12 +117,17 @@ class PrecipDataModule(LightningDataModule):
             else:
                 self.val_sampler = None # to be defined later
         elif self.hparams.dataloader_mode == 'specify_eval':
-            self.precip_dataset = RainfallSpecifiedInference(self.data_config, self.hparams.specify_eval_targets)
+            if type(self.data_config.image_size) == int:
+                self.precip_dataset = RainfallSpecifiedInference(self.data_config, self.hparams.specify_eval_targets)
+            elif type(self.data_config.image_size) == ListConfig:
+                assert len(self.data_config.image_size) == 2, "Unknown image size format: {self.data_config.image_size}"
+                self.precip_dataset = RainfallDatasetNonSquare(self.data_config, self.hparams.specify_eval_targets)
+            elif self.data_config.image_size == 'full':
+                raise NotImplementedError("TODO")
+            # self.precip_dataset = RainfallDatasetCONUS(self.data_config)
         elif self.hparams.dataloader_mode == 'eval_set_deterministic':
             self.precip_dataset = PreSavedPrecipDataset(self.data_config, self.hparams.use_test_samples_from,
                                                         self.hparams.stop_at_batch, stage='test')
-        elif self.hparams.dataloader_mode == 'eval_entire_conus':
-            self.precip_dataset = RainfallDatasetCONUS(self.data_config)
         else:
             raise ValueError(f"Unknown dataloader mode: {self.hparams.dataloader_mode}")
         return
@@ -211,17 +217,20 @@ if __name__ == "__main__":
     # debug
     with initialize(version_base=None, config_path="../../configs/", job_name="evaluation"):
         # config = compose(config_name="cpc_mrms_data")
-        config = compose(config_name="eval")
+        # config = compose(config_name="eval")
+        config = compose(config_name="eval", overrides=["experiment=specified_eval",
+                                                        "data.data_config.image_size=[500,700]"
+                                                        ])
 
     ## train
-    data_module = PrecipDataModule(config.data.data_config)
-    data_module.setup(stage="fit")
-    train_loader = data_module.train_dataloader()
-    print(f"Train DataLoader initialized with {len(train_loader)} batches.")
-    # Get the first batch
-    first_batch = next(iter(train_loader))
-    print(f"First batch: {first_batch}")
-    ## eval
+    # data_module = PrecipDataModule(config.data.data_config)
+    # data_module.setup(stage="fit")
+    # train_loader = data_module.train_dataloader()
+    # print(f"Train DataLoader initialized with {len(train_loader)} batches.")
+    # # Get the first batch
+    # first_batch = next(iter(train_loader))
+    # print(f"First batch: {first_batch}")
+    ## eval, test entire conus
     # data_module = PrecipDataModule(config.data.data_config, dataloader_mode='eval_entire_conus')
     # data_module.setup(stage="test")
     # test_loader = data_module.test_dataloader()
@@ -229,3 +238,13 @@ if __name__ == "__main__":
     # # Get the first batch
     # first_batch = next(iter(test_loader))
     # print(f"First batch: {first_batch}")
+
+    ## eval, test nonsquared crop
+    data_module = PrecipDataModule(config.data.data_config, dataloader_mode=config.data.dataloader_mode,
+                                   specify_eval_targets=config.data.specify_eval_targets)
+    data_module.setup(stage="test")
+    test_loader = data_module.test_dataloader()
+    print(f"Test DataLoader initialized with {len(test_loader)} batches.")
+    # Get the first batch
+    first_batch = next(iter(test_loader))
+    print(f"First batch: {first_batch}")
