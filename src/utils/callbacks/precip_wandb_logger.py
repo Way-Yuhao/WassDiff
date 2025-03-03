@@ -9,11 +9,166 @@ from lightning.pytorch.utilities import rank_zero_only
 import wandb
 from matplotlib import pyplot as plt
 from lightning.pytorch.callbacks import RichProgressBar, Callback
-from src.utils.helper import wandb_display_grid, cm_, visualize_batch
+from src.utils.callbacks.generic_wandb_logger import GenericLogger, hold_pbar
+from src.utils.helper import wandb_display_grid, cm_
+from src.utils.helper import visualize_batch as visualize_batch_static
 from src.utils.metrics import calc_mae, calc_bias
 
 
-class PrecipDataLogger(Callback):
+class PrecipDataLogger(GenericLogger):
+    def __init__(self, train_log_img_freq: int = 1000, train_log_score_freq: int = 1000,
+                 train_ckpt_freq: int = 1000, show_samples_at_start: bool = False,
+                 show_unconditional_samples: bool = False, check_freq_via: str = 'global_step',
+                 enable_save_ckpt: bool = False, add_reference_artifact: bool = False,
+                 report_sample_metrics: bool = True, sampling_batch_size: int = 6):
+        """
+        Callback to log images, scores and parameters to wandb.
+        :param train_log_img_freq: frequency to log images. Set to -1 to disable
+        :param train_log_score_freq: frequency to log scores. Set to -1 to disable
+        :param train_ckpt_freq: frequency to log parameters. Set to -1 to disable
+        :param show_samples_at_start: whether to log samples at the start of training (likely during sanity check)
+        :param show_unconditional_samples: whether to log unconditional samples. Deprecated.
+        :param check_freq_via: whether to check frequency via 'global_step' or 'epoch'
+        :param enable_save_ckpt: whether to save checkpoint
+        :param add_reference_artifact: whether to add the checkpoint as a reference artifact
+        :param report_sample_metrics: whether to report sample metrics
+        :param sampling_batch_size: number of samples to visualize
+        """
+        super().__init__(train_log_img_freq, train_log_score_freq, train_ckpt_freq, show_samples_at_start,
+                         show_unconditional_samples, check_freq_via, enable_save_ckpt, add_reference_artifact,
+                         report_sample_metrics, sampling_batch_size)
+        # additional attributes specific for rainfall
+        self.rainfall_dataset = None
+
+    @rank_zero_only
+    def on_fit_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        super().on_fit_start(trainer, pl_module)
+        self.rainfall_dataset = trainer.datamodule.precip_dataset
+
+    @rank_zero_only
+    def on_train_batch_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", batch: Any,
+                             batch_idx: int) -> None:
+        # visualize the first batch in logger
+        batch, _ = batch  # discard coordinates
+        if not self.first_batch_visualized:
+            visualize_batch_static(**batch)
+            self.first_batch_visualized = True
+        return
+
+    def log_score(self, pl_module: LightningModule, outputs: Dict[str, torch.Tensor]):
+        s = pl_module.model_config.sampling.sampling_batch_size
+        condition = outputs['condition']
+        context_mask = outputs['context_mask']
+        loss_dict = outputs['loss_dict']
+        batch_dict = outputs['batch_dict']
+        step = pl_module.global_step
+        config = pl_module.model_config
+        gt = outputs['batch_dict']['precip_gt']
+
+        if pl_module.model_config.data.condition_mode == 1:
+            wandb_display_grid(condition, log_key='train_score/condition', caption='condition', step=step, ncol=s)
+        elif config.data.condition_mode in [2, 3]:
+            wandb_display_grid(batch_dict['precip_up'], log_key='train_score/condition',
+                               caption='low_res upsampled', step=step, ncol=s)
+        elif config.data.condition_mode in [4, 5]:
+            wandb_display_grid(batch_dict['precip_masked'], log_key='train_score/condition',
+                               caption='masked', step=step, ncol=s)
+        wandb_display_grid(context_mask, log_key='train_score/mask', caption='context_mask', step=step, ncol=s)
+        wandb_display_grid(loss_dict['score'], log_key='train_score/score', caption='score', step=step, ncol=s)
+        wandb_display_grid(loss_dict['target'], log_key='train_score/target', caption='target', step=step, ncol=s)
+        # wandb_display_grid(loss_dict['noise'], log_key='train_score/noise', caption='noise', step=step, ncol=s)
+        wandb_display_grid(loss_dict['perturbed_data'], log_key='train_score/perturbed_data',
+                           caption='perturbed_data', step=step, ncol=s)
+        wandb_display_grid(loss_dict['denoised_data'], log_key='train_score/denoised_data',
+                           caption='denoised_data', step=step, ncol=s)
+        wandb_display_grid(loss_dict['error_map'], log_key='train_score/error_map', caption='error_map',
+                           step=step, ncol=s)
+        wandb_display_grid(gt, log_key='train_score/gt', caption='gt', step=step, ncol=s)
+        return
+
+    @hold_pbar("sampling...")
+    def log_samples(self, trainer: Trainer, pl_module: LightningModule, outputs: Dict[str, torch.Tensor]):
+        condition = outputs['condition']
+        batch_dict = outputs['batch_dict']
+        gt = outputs['batch_dict']['precip_gt']
+        config = pl_module.model_config
+        s = self.sampling_batch_size
+
+        # sample, n = pl_module.sampling_fn(pl_module.net, condition=condition[0:s],
+        #                                   w=config.model.w_guide, null_condition=sampling_null_condition)
+        sample = pl_module.sample(condition[0:s])
+
+        if config.data.condition_mode == 1:
+            # display condition and output in one grid
+            if config.data.condition_size < config.data.image_size:
+                low_res_display = F.interpolate(condition,
+                                                size=(config.data.image_size, config.data.image_size),
+                                                mode='nearest')
+            elif config.data.condition_size == config.data.image_size:
+                low_res_display = condition.detach().clone()
+        elif config.data.condition_mode in [2, 3, 6]:
+            if config.data.condition_size < config.data.image_size:
+                low_res_display = F.interpolate(batch_dict['precip_lr'],
+                                                size=(config.data.image_size, config.data.image_size),
+                                                mode='nearest')
+            elif config.data.condition_size == config.data.image_size:
+                low_res_display = batch_dict['precip_up'].detach().clone()
+        elif config.data.condition_mode in [4, 5]:
+            low_res_display = batch_dict['precip_masked'].detach().clone()
+        low_res_display = low_res_display.to(pl_module.device)
+
+        low_res_display = self.rainfall_dataset.inverse_normalize_precip(low_res_display)
+        sample = self.rainfall_dataset.inverse_normalize_precip(sample)
+        gt = self.rainfall_dataset.inverse_normalize_precip(gt)
+
+        self.log_conditional_samples_scaled(low_res_display, sample, gt, n=s)
+
+        # log sample metrics
+        if self.report_sample_metrics:
+            mae = calc_mae(sample.cpu().detach().numpy(), gt[0:s, :, :, :].cpu().detach().numpy(), valid_mask=None, k=1,
+                           pooling_func='mean')
+            bias = calc_bias(sample.cpu().detach().numpy(), gt[0:s, :, :, :].cpu().detach().numpy(), valid_mask=None,
+                             k=1,
+                             pooling_func='mean')
+            wandb.log({'val/sample_mae': mae, 'val/sample_bias': bias, 'epoch': trainer.current_epoch})
+
+    @hold_pbar("sampling...")
+    def log_conditional_samples_scaled(self, input_row: torch.Tensor, output_row: torch.Tensor, gt_row: torch.Tensor, n: int,
+                                       step: Optional[int] = None, epoch: Optional[int] = None):
+        input_row = input_row[0:n, :, :, :]
+        output_row = output_row[0:n, :, :, :]
+        gt_row = gt_row[0:n, :, :, :]
+        fig, axs = plt.subplots(3, n, figsize=(n * 5, 15))  # Adjust the figure size as needed
+
+        for i in range(n):
+            vmax_ = max(input_row[i].max(), gt_row[i].max())
+            # Display input_row images
+            im1 = axs[0, i].imshow(input_row[i, 0, :, :].detach().cpu().numpy(), cmap='magma', vmin=0, vmax=vmax_)
+            fig.colorbar(im1, ax=axs[0, i], fraction=0.046, pad=0.04)
+            axs[0, i].set_xticks([])
+            axs[0, i].set_yticks([])
+            # Display output_row images
+            im2 = axs[1, i].imshow(output_row[i, 0, :, :].detach().cpu().numpy(), cmap='magma', vmin=0, vmax=vmax_)
+            fig.colorbar(im2, ax=axs[1, i], fraction=0.046, pad=0.04)
+            axs[1, i].set_xticks([])
+            axs[1, i].set_yticks([])
+            # Display gt_row images
+            im3 = axs[2, i].imshow(gt_row[i, 0, :, :].detach().cpu().numpy(), cmap='magma', vmin=0, vmax=vmax_)
+            fig.colorbar(im3, ax=axs[2, i], fraction=0.046, pad=0.04)
+            axs[2, i].set_xticks([])
+            axs[2, i].set_yticks([])
+        plt.tight_layout()
+        plt.close(fig)
+        # Log the figure to wandb
+        images = wandb.Image(fig)
+        wandb.log({"val/conditional_samples_scaled": images})
+        return
+
+    def visualize_batch(self, **kwargs):
+        return visualize_batch_static(**kwargs)
+
+
+class LegacyPrecipDataLogger(Callback):
     def __init__(self, train_log_img_freq: int = 1000, train_log_score_freq: int = 1000,
                  train_log_param_freq: int = 1000, show_samples_at_start: bool = False,
                  show_unconditional_samples: bool = False, check_freq_via: str = 'global_step',
@@ -70,7 +225,7 @@ class PrecipDataLogger(Callback):
         # visualize the first batch in logger
         batch, _ = batch  # discard coordinates
         if not self.first_batch_visualized:
-            visualize_batch(**batch)
+            visualize_batch_static(**batch)
             self.first_batch_visualized = True
         return
 

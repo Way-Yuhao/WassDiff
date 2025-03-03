@@ -1,14 +1,11 @@
 log_precip_data:
-  _target_: src.utils.callbacks.precip_wandb_logger.PrecipDataLogger
-#  check_freq_via: 'global_step'
-#  train_log_img_freq: 1000
-#  train_log_score_freq: 10000
-#  train_log_param_freq: 10000
+  _target_: src.utils.callbacks.PrecipDataLogger
   check_freq_via: 'epoch'
   train_log_img_freq: 10
   train_log_score_freq: 100
-  train_log_param_freq: 100
+  train_ckpt_freq: 100
   show_samples_at_start: false
   show_unconditional_samples: false
   enable_save_ckpt: true
   add_reference_artifact: true
+  sampling_batch_size: 6

@@ -3,6 +3,7 @@ import torch
 from lightning import LightningModule
 from modulus.models.diffusion import UNet, EDMPrecondSR
 from src.models.precip_downscale import GenericPrecipDownscaleModule
+from src.utils.corrdiff_utils.inference import regression_step_only
 from src.utils.helper import yprint
 
 class UNetLitModule(GenericPrecipDownscaleModule):
@@ -35,8 +36,10 @@ class UNetLitModule(GenericPrecipDownscaleModule):
     def training_step(self, batch: Tuple[Dict, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
         batch_dict, _ = batch  # discard coordinates
         condition, gt = self._generate_condition(batch_dict)
-        prediction = self.forward(condition)
-        loss = self.criterion(prediction, gt)
+        # prediction = self.forward(condition)
+        # loss = self.criterion(prediction, gt)
+        loss, prediction = self.criterion(net=self.net, img_clean=gt, img_lr=condition)
+        loss = loss.mean()
         self.log("train/loss", loss, on_step=True, on_epoch=False, prog_bar=False, batch_size=condition.shape[0])
         return loss
 
@@ -53,4 +56,7 @@ class UNetLitModule(GenericPrecipDownscaleModule):
         return step_output
 
     def sample(self, condition: torch.Tensor) -> torch.Tensor:
-        return self.forward(condition)
+        latent_shape = (condition.shape[0], 1, condition.shape[2], condition.shape[3])
+        image_reg = regression_step_only(net = self.net, img_lr=condition, latents_shape=latent_shape,
+                                         lead_time_label=None)
+        return image_reg
