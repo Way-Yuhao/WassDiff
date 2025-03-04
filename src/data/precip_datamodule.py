@@ -9,7 +9,7 @@ from omegaconf.listconfig import ListConfig
 from src.data.cpc_mrms_dataset import DailyAggregateRainfallDataset
 from src.data.precip_dataloader_inference import (RainfallSpecifiedInference, PreSavedPrecipDataset,
                                                   xarray_collate_fn, do_nothing_collate_fn)
-from src.data.cpc_mrms_dataset_tiled import RainfallDatasetCONUS, RainfallDatasetNonSquare
+from src.data.cpc_mrms_dataset_tiled import RainfallDatasetNonSquare
 
 
 class PrecipDataModule(LightningDataModule):
@@ -117,14 +117,17 @@ class PrecipDataModule(LightningDataModule):
             else:
                 self.val_sampler = None # to be defined later
         elif self.hparams.dataloader_mode == 'specify_eval':
+            # width
             if type(self.data_config.image_size) == int:
                 self.precip_dataset = RainfallSpecifiedInference(self.data_config, self.hparams.specify_eval_targets)
-            elif type(self.data_config.image_size) == ListConfig:
-                assert len(self.data_config.image_size) == 2, "Unknown image size format: {self.data_config.image_size}"
+            # (height, width)
+            elif type(self.data_config.image_size) == ListConfig and len(self.data_config.image_size) == 2:
                 self.precip_dataset = RainfallDatasetNonSquare(self.data_config, self.hparams.specify_eval_targets)
+            # full CONUS
             elif self.data_config.image_size == 'full':
-                raise NotImplementedError("TODO")
-            # self.precip_dataset = RainfallDatasetCONUS(self.data_config)
+                self.precip_dataset = RainfallDatasetNonSquare(self.data_config, self.hparams.specify_eval_targets)
+            else:
+                raise ValueError(f"Invalid image size: {self.data_config.image_size}")
         elif self.hparams.dataloader_mode == 'eval_set_deterministic':
             self.precip_dataset = PreSavedPrecipDataset(self.data_config, self.hparams.use_test_samples_from,
                                                         self.hparams.stop_at_batch, stage='test')
@@ -219,7 +222,8 @@ if __name__ == "__main__":
         # config = compose(config_name="cpc_mrms_data")
         # config = compose(config_name="eval")
         config = compose(config_name="eval", overrides=["experiment=specified_eval",
-                                                        "data.data_config.image_size=[500,700]"
+                                                        # "data.data_config.image_size=[500,700]"
+                                                        "data.data_config.image_size=full"
                                                         ])
 
     ## train
