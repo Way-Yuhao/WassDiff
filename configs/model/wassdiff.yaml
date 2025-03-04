@@ -19,9 +19,11 @@ optimizer_config:
     warmup: 5000
     grad_clip: 1.0
 
-tiled_config: null
-vis_params: null
-
+tiled_config:
+  pch_size: 256
+  stride: 192
+  sf: 1
+  batch_size: 3
 
 #scheduler:
 model_config:
@@ -85,5 +87,5 @@ model_config:
     method: 'pc'
     predictor: 'reverse_diffusion'
     corrector: 'langevin'
-    sampling_batch_size: 12
+    sampling_batch_size: 4
 

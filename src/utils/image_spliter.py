@@ -107,30 +107,6 @@ class ImageSpliterTh:
             raise StopIteration()
 
         return pch, (h_start_sf, h_end_sf, w_start_sf, w_end_sf)
-        # if self.num_pchs < self.length:
-        #     w_start_idx = self.num_pchs // len(self.height_starts_list)
-        #     w_start = self.width_starts_list[w_start_idx]
-        #     w_end = w_start + self.pch_size
-        #
-        #     h_start_idx = self.num_pchs % len(self.height_starts_list)
-        #     h_start = self.height_starts_list[h_start_idx]
-        #     h_end = h_start + self.pch_size
-        #
-        #     pch = self.im_ori[:, :, h_start:h_end, w_start:w_end,]
-        #
-        #     h_start *= self.sf
-        #     h_end *= self.sf
-        #     w_start *= self.sf
-        #     w_end *= self.sf
-        #
-        #     self.w_start, self.w_end = w_start, w_end
-        #     self.h_start, self.h_end = h_start, h_end
-        #
-        #     self.num_pchs += 1
-        # else:
-        #     raise StopIteration()
-        #
-        # return pch, (h_start, h_end, w_start, w_end)
 
     def _gaussian_weights(self, tile_width, tile_height, nbatches, device):
         """Generates a gaussian mask of weights for tile contributions"""
@@ -147,34 +123,9 @@ class ImageSpliterTh:
         y_probs = [exp(-(y-midpoint)*(y-midpoint)/(latent_height*latent_height)/(2*var)) / sqrt(2*pi*var) for y in range(latent_height)]
 
         weights = np.outer(y_probs, x_probs)
-        weights_tensor = torch.tensor(weights, device=device).unsqueeze(0).unsqueeze(0)  # Shape: (1, 1, tile_height, tile_width)
-        weights_tensor = weights_tensor.repeat(nbatches, self.chn, 1,1)  # Shape: (nbatches, chn, tile_height, tile_width)
+        weights_tensor = torch.tensor(weights, device=device).unsqueeze(0).unsqueeze(0)
+        weights_tensor = weights_tensor.repeat(nbatches, self.chn, 1, 1)
         return weights_tensor
-    #
-    # def _gaussian_weights(self, tile_width, tile_height, nbatches, device, var=0.005):
-    #     """Generates a normalized Gaussian mask of weights for tile contributions."""
-    #     from math import exp, sqrt, pi
-    #     import numpy as np
-    #     # Compute midpoints
-    #     midpoint_x = (tile_width - 1) / 2
-    #     midpoint_y = (tile_height - 1) / 2
-    #
-    #     # Compute x and y Gaussian probabilities
-    #     x_probs = [exp(-((x - midpoint_x) ** 2) / (2 * var)) for x in range(tile_width)]
-    #     y_probs = [exp(-((y - midpoint_y) ** 2) / (2 * var)) for y in range(tile_height)]
-    #
-    #     # Create 2D Gaussian weights
-    #     weights = np.outer(y_probs, x_probs)
-    #
-    #     # Normalize weights so that the sum is 1
-    #     weights /= weights.sum()
-    #
-    #     # Convert to torch tensor and reshape
-    #     weights_tensor = torch.tensor(weights, device=device, dtype=torch.float32).unsqueeze(0).unsqueeze(
-    #         0)  # Shape: (1, 1, tile_height, tile_width)
-    #     weights_tensor = weights_tensor.repeat(nbatches, self.chn, 1,1)  # Shape: (nbatches, chn, tile_height, tile_width)
-    #
-    #     return weights_tensor
 
     def update(self, pch_res, index_infos):
         '''
@@ -204,13 +155,7 @@ class ImageSpliterTh:
         else:
             h_start, h_end, w_start, w_end = index_infos
 
-        #     # Check if it's an edge patch
-        # is_edge = (h_start == 0 or h_end == self.im_res.shape[2] or
-        #                w_start == 0 or w_end == self.im_res.shape[3])
-        # mask_weight = 1.4 if is_edge else 1.0  # Adjust weight for edge patches
-
-        self.weight /= self.weight.sum()
-
+        #self.weight /= self.weight.sum()
         self.im_res[:, :, h_start:h_end, w_start:w_end] += pch_res * self.weight
         self.pixel_count[:, :, h_start:h_end, w_start:w_end] += self.weight
 

@@ -17,7 +17,6 @@ import src.utils.ncsn_utils.controllable_generation as controllable_generation
 from src.utils.ncsn_utils.utils import restore_checkpoint
 from src.utils.ncsn_utils.losses import get_optimizer
 from src.utils.helper import yprint
-from src.utils.image_spliter import ImageSpliterTh
 
 
 class WassDiffLitModule(LightningModule):
@@ -26,7 +25,7 @@ class WassDiffLitModule(LightningModule):
 
     def __init__(self, model_config: dict, optimizer_config: dict, tiled_config: dict,
                  compile: bool, num_samples: int = 1, pytorch_ckpt_path: Optional[str] = None,
-                 tiled_diffusion: bool = True, vis_params: Optional[Dict[str, Any]] = None,
+                 tiled_diffusion: bool = True,
                  *args, **kwargs) -> None:
         """Initialize a `WassDiffLitModule`.
 
@@ -51,7 +50,7 @@ class WassDiffLitModule(LightningModule):
         self.train_step_fn = None
         self.eval_step_fn = None
         self.sampling_fn = None  # sampling function used during training (for displaying conditional samples)
-        self.pc_upsampler = None  # sampling function used during inference (Predictor-Corrector upsampler)
+        self.pc_upsampler = None  # sampling function used during inference
 
         # internal flags
         self.automatic_optimization = False
@@ -193,7 +192,8 @@ class WassDiffLitModule(LightningModule):
         """
         return self.net(x)
 
-    def training_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
+    def training_step(
+            self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
         """Perform a single training step on a batch of data from the training set.
 
         :param batch: A batch of data (a tuple) containing the input tensor of images and target
@@ -260,12 +260,20 @@ class WassDiffLitModule(LightningModule):
         if self.hparams.bypass_sampling:
             batch_dict['precip_output'] = torch.zeros_like(gt)
         else:
-            x = self.pc_upsampler(self.net, self.scaler(condition), w=self.model_config.model.w_guide,
-                                  out_dim=(batch_size, 1, self.model_config.data.image_size, self.model_config.data.image_size),
-                                  null_condition=null_condition,
-                                  display_pbar=self.hparams.display_sampling_pbar,
-                                  vis_params=self.hparams.vis_params,
-                                  tiled_params=self.hparams.tiled_config)
+            ##change the image size here
+            x = self.pc_upsampler(
+                model=self.net,
+                condition=self.scaler(condition),
+                w=self.model_config.model.w_guide,
+                out_dim=(batch_size, 1, self.model_config.data.image_size, self.model_config.data.image_size),
+                save_dir=None,
+                null_condition=null_condition,
+                display_pbar=self.hparams.display_sampling_pbar,
+                gt=gt,
+                null=self.model_config.model.null_token,
+                tiled_diffusion=self.tiled_diffusion,  # new flag parameter
+                tiled_config=self.tiled_config  # new config parameter
+            )
             if self.hparams.num_samples == 1:
                     # print dimension
                     batch_dict['precip_output'] = x
@@ -276,22 +284,9 @@ class WassDiffLitModule(LightningModule):
                 # print(batch_coords)
                 # print(xr_low_res_batch)
                 # print(valid_mask)
-            return {'batch_dict': batch_dict, 'batch_coords': batch_coords, 'xr_low_res_batch': xr_low_res_batch,
-                    'valid_mask': valid_mask}
+        return {'batch_dict': batch_dict, 'batch_coords': batch_coords, 'xr_low_res_batch': xr_low_res_batch,
+                'valid_mask': valid_mask}
 
-
-    def sample(self, condition: torch.Tensor) -> torch.Tensor:
-        """
-        Runs sampling fn when given condition tensor. No further trimming or processing is performance.
-        Note that sampling fn is NOT the full Predictor-Corrector Sampler (more accurate).
-        This is only intended to use during validation to gather quick samples.
-        Usage at test time is not recommended.
-        """
-        config = self.model_config
-        sampling_null_condition = self.sampling_null_condition
-        sample, n = self.sampling_fn(self.net, condition=condition, w=config.model.w_guide,
-                                     null_condition=sampling_null_condition)
-        return sample
     def _generate_null_condition(self):
         # generate null condition for sampling
         s = self.model_config.sampling.sampling_batch_size
