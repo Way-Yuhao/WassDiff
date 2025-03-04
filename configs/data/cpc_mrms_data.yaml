@@ -5,6 +5,7 @@ defaults:
 _target_: src.data.precip_datamodule.PrecipDataModule
 batch_size: 12
 num_workers: 12
+dataloader_mode: 'train' # 'train', 'train_det_val', 'eval_set_random', 'eval_set_deterministic', 'specify_eval'
 data_config:
   train_val_split: .2
   uniform_dequantization: false
