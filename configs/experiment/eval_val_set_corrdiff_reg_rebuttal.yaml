@@ -1,0 +1,28 @@
+# @package _global_
+
+defaults:
+  - /callbacks: eval_on_dataset
+  - override /model: baseline_corrdiff_regression_mini
+  - _self_
+
+data:
+  dataloader_mode: eval_set_deterministic
+  use_test_samples_from: ${paths.data_dir}/rainfall_eval/50_eval_samples_2
+  stop_at_batch: 30
+  data_config:
+    image_size: 256 # 512
+
+
+#ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2025-03-01_12-06-50/checkpoints/epoch_999_step_3548.ckpt
+
+
+#callbacks:
+#  eval_on_dataset:
+#    eval_only_on_existing: true
+
+paths:
+  output_dir:  ${local.eval_set_root_dir}/${name}
+  log_dir: ${paths.output_dir}
+
+#name: # WassDiff_LiT_trained_det_eval_mb_step_1101_reproduce
+#name: WassDiff_ablation_surf_temp

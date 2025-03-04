@@ -53,6 +53,30 @@ class UNetLitModule(GenericPrecipDownscaleModule):
         step_output = {"batch_dict": batch_dict, "condition": condition}
         return step_output
 
+    def test_step(self, batch: Tuple[Dict, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
+        if self.skip_next_batch:  # determine whether to skip this batch
+            return {}
+        batch_dict, batch_coords, xr_low_res_batch, valid_mask = batch
+        condition, gt = self._generate_condition(batch_dict)
+        # ensemble prediction, if needed
+        if self.hparams.num_samples > 1 and condition.shape[0] > 1:
+            raise AttributeError('Ensemble prediction not supported for batch size > 1.')
+        elif self.hparams.num_samples > 1 and condition.shape[0] == 1:
+            condition = condition.repeat(self.hparams.num_samples, 1, 1, 1)
+
+
+        latent_shape = (condition.shape[0], 1, condition.shape[2], condition.shape[3])
+        x = regression_step_only(net=self.net, img_lr=condition, latents_shape=latent_shape,
+                                         lead_time_label=None)
+        if self.hparams.num_samples == 1:
+            batch_dict['precip_output'] = x
+        else:
+            for i in range(self.hparams.num_samples):
+                batch_dict['precip_output_' + str(i)] = x[i, :, :, :]
+
+        return {'batch_dict': batch_dict, 'batch_coords': batch_coords, 'xr_low_res_batch': xr_low_res_batch,
+                'valid_mask': valid_mask}
+
     def sample(self, condition: torch.Tensor) -> torch.Tensor:
         latent_shape = (condition.shape[0], 1, condition.shape[2], condition.shape[3])
         image_reg = regression_step_only(net = self.net, img_lr=condition, latents_shape=latent_shape,

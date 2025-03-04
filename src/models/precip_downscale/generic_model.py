@@ -13,6 +13,12 @@ __author__ = 'Yuhao Liu'
 
 class GenericPrecipDownscaleModule(LightningModule, ABC):
 
+    def __init__(self):
+        super().__init__()
+        # internal flags
+        self.first_batch_visualized = False
+        self.skip_next_batch = False  # flag to be modified by callbacks
+
 
     def _generate_condition(self, batch_dict: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         """

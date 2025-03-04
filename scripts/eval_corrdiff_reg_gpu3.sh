@@ -1,0 +1,1 @@
+python ./src/eval.py trainer.devices=[3] name=CorrDiff_Reg experiment=eval_val_set_corrdiff_reg_rebuttal data.stop_at_batch=40 ckpt_path=/home/yl241/models/WassDiff-LiT/2025-03-01_12-06-50/checkpoints/epoch_999_step_3548.ckpt;

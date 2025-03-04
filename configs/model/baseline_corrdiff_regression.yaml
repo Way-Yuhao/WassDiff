@@ -16,6 +16,7 @@
 
 _target_: src.models.baselines.corrdiff.UNetLitModule
 compile: false
+num_samples: 1 # for inference, aka ensemble size
 
 net:
   _target_: modulus.models.diffusion.UNet
