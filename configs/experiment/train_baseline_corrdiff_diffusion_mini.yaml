@@ -6,7 +6,6 @@ defaults:
 
 model:
   regression_net_ckpt: ${local.model_root_dir}/WassDiff-LiT/2025-03-01_12-06-50/checkpoints/epoch_999_step_3548.pt
-  regression_net_device: 'cuda:3'
 
 logger:
   wandb:
@@ -26,8 +25,8 @@ data:
   data_config:
     image_size: 256 # size of high-resolution image
     condition_size: 256 # size of low-resolution image
-  batch_size: 12
-  num_workers: 12
+  batch_size: 8
+  num_workers: 8
 
 #trainer:
 #  limit_train_batches: 2  # debug

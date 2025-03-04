@@ -65,3 +65,20 @@ criterion:
   patch_shape_y: ${data.data_config.image_size} # patch_shape[0],
   patch_num: 1 # patch_num,
   hr_mean_conditioning: false # modified TODO: verify
+
+sampling: #  type: stochastic
+  _target_: modulus.utils.generative.stochastic_sampler
+  _partial_: true
+#  _partial_: true
+  boundary_pix: 2
+  overlap_pix: 4
+  img_shape: ${data.data_config.image_size}
+  patch_shape: ${data.data_config.image_size}
+
+
+  # or
+#  type: deterministic
+#  num_steps: 9
+#  # Number of denoising steps
+#  solver: euler
+#  # ODE solver [euler, heun]

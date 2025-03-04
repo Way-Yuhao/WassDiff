@@ -61,6 +61,58 @@ def regression_step_only(
     return x
 
 
+def diffusion_step_batch(
+        net: torch.nn.Module,
+        sampler_fn: callable,
+        img_lr: torch.Tensor,
+        img_shape: tuple,
+        img_out_channels: int,
+        device: torch.device,
+        hr_mean: torch.Tensor = None,
+        lead_time_label: torch.Tensor = None,
+) -> torch.Tensor:
+    """
+    Generate images for a batch of low-res inputs.
+
+    Args:
+        net (torch.nn.Module): The diffusion model network.
+        sampler_fn (callable): Function used to sample images from the diffusion model.
+        img_lr (torch.Tensor): Batched low-resolution inputs of shape (B, C, H, W).
+        img_shape (tuple): Target image shape (height, width).
+        img_out_channels (int): Number of output channels.
+        device (torch.device): Device for computation.
+        hr_mean (torch.Tensor, optional): High-resolution mean tensor.
+        lead_time_label (torch.Tensor, optional): Lead time label.
+
+    Returns:
+        torch.Tensor: Generated images of shape (B, img_out_channels, H, W).
+    """
+    # Ensure the low-res images are in channels_last memory format
+    img_lr = img_lr.to(memory_format=torch.channels_last)
+    batch_size = img_lr.shape[0]
+
+    # Prepare any additional arguments for the sampler
+    additional_args = {"img_shape": img_shape}
+    if hr_mean is not None:
+        additional_args["mean_hr"] = hr_mean
+    if lead_time_label is not None:
+        additional_args["lead_time_label"] = lead_time_label
+
+    # Generate a latent for each input in the batch.
+    latents = torch.randn(
+        (batch_size, img_out_channels, img_shape[0], img_shape[1]),
+        dtype=torch.float64,
+        device=device,
+    ).to(memory_format=torch.channels_last)
+
+    with torch.inference_mode():
+        images = sampler_fn(net, latents, img_lr, **additional_args)
+
+    return images
+
+
+################### BELOW IS ORIGINAL CODE FROM NVIDIA ###############
+
 def regression_step(
         net: torch.nn.Module,
         img_lr: torch.Tensor,

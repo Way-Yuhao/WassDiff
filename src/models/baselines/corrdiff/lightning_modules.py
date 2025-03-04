@@ -1,9 +1,7 @@
 from typing import Any, Dict, Tuple, Optional
 import torch
-from lightning import LightningModule
-from modulus.models.diffusion import UNet, EDMPrecondSR
 from src.models.precip_downscale import GenericPrecipDownscaleModule
-from src.utils.corrdiff_utils.inference import regression_step_only
+from src.utils.corrdiff_utils.inference import regression_step_only, diffusion_step_batch
 from src.utils.helper import yprint
 
 class UNetLitModule(GenericPrecipDownscaleModule):
@@ -64,12 +62,15 @@ class UNetLitModule(GenericPrecipDownscaleModule):
 
 class CorrDiffLiTModule(GenericPrecipDownscaleModule):
 
-    def __init__(self, net: torch.nn.Module, criterion, model_config, *args, **kwargs):
+    def __init__(self, net: torch.nn.Module, criterion, model_config, sampling, *args, **kwargs):
         super().__init__()
         self.net = net
         self.criterion = criterion
+        self.sampler = sampling
         self.model_config = model_config
         self.save_hyperparameters(logger=False, ignore=("net", "optimizer_config", "criterion"))
+
+        # to be defined elsewhere
         self.regression_net = None
         return
 
@@ -83,27 +84,23 @@ class CorrDiffLiTModule(GenericPrecipDownscaleModule):
         self.criterion = self.criterion(regression_net=self.regression_net)
         return
 
-
     def load_regression_net(self):
         """
         Loads from .ckpt
         """
         ckpt_ = self.hparams.regression_net_ckpt
-        device_ = self.hparams.regression_net_device
-        self.regression_net = torch.load(ckpt_, map_location=device_)
+        self.regression_net = torch.load(ckpt_, map_location=self.device)
         yprint(f"Regression net loaded from {ckpt_}")
         return
-
 
     def configure_optimizers(self) -> Dict[str, Any]:
         optimizer = self.hparams.optimizer(params=self.trainer.model.parameters())
         return {"optimizer": optimizer}
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # forward(self, x, img_lr, sigma, force_fp32=False, **model_kwargs):
-        # forcing sigma = 1; assuming model is being used outside of diffusion
-        return self.net(x, img_lr=None, sigma=torch.tensor(0.0, device=x.device, dtype=torch.float32))
-
+    # def forward(self, x: torch.Tensor) -> torch.Tensor:
+    #     # forward(self, x, img_lr, sigma, force_fp32=False, **model_kwargs):
+    #     # forcing sigma = 1; assuming model is being used outside of diffusion
+    #     return self.net(x, img_lr=None, sigma=torch.tensor(0.0, device=x.device, dtype=torch.float32))
     def training_step(self, batch: Tuple[Dict, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
         batch_dict, _ = batch  # discard coordinates
         condition, gt = self._generate_condition(batch_dict)
@@ -127,4 +124,18 @@ class CorrDiffLiTModule(GenericPrecipDownscaleModule):
         return step_output
 
     def sample(self, condition: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError()
+        latent_shape = (condition.shape[0], 1, condition.shape[2], condition.shape[3])
+        prediction_mean = regression_step_only(net=self.regression_net, img_lr=condition, latents_shape=latent_shape,
+                                               lead_time_label=None)
+        prediction_residual = diffusion_step_batch(
+                net=self.net,
+                sampler_fn=self.sampler,
+                img_lr=condition,
+                img_shape=condition.shape[2:],
+                img_out_channels=1,
+                device=self.device,
+                hr_mean=None,
+                lead_time_label=None,
+        )
+        prediction = prediction_mean + prediction_residual
+        return prediction
