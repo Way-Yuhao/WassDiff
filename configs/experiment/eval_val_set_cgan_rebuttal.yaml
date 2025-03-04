@@ -1,0 +1,27 @@
+# @package _global_
+
+defaults:
+  - /callbacks: eval_on_dataset
+  - override /model: baseline_corrector_gan
+  - _self_
+
+data:
+  dataloader_mode: eval_set_deterministic
+  use_test_samples_from: ${paths.data_dir}/rainfall_eval/50_eval_samples_2
+  stop_at_batch: 30
+  data_config:
+    image_size: 512
+
+model:
+  noise_shape: [6, 1, 64, 64] # increased dim to support 512 x 512 output
+  num_samples: 1
+#  compile: false
+  pytorch_ckpt_path: null
+
+#ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-10-07_22-43-21/checkpoints/epoch_699_step_917.ckpt
+#name: CorrectorGAN_epoch_699
+
+paths:
+  output_dir:  ${local.eval_set_root_dir}/${name}
+  log_dir: ${paths.output_dir}
+
