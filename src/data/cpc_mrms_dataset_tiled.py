@@ -5,54 +5,64 @@ import numpy as np
 from numpy import ndarray
 import xarray as xr
 from hydra import compose, initialize
+from omegaconf import OmegaConf
+from omegaconf.listconfig import ListConfig
 from src.data.cpc_mrms_dataset import DailyAggregateRainfallDataset, get_precip_era5_dataset
 from src.data.precip_dataloader_inference import RainfallSpecifiedInference
 from src.utils.helper import deprecated, yprint, get_training_progressbar
-# FIXME: for debug only. Remove later
-from omegaconf import OmegaConf
 
 __author__ = 'yuhao liu'
 
 
-class RainfallDatasetCONUS(DailyAggregateRainfallDataset):
+class RainfallDatasetNonSquare(RainfallSpecifiedInference):
     """
-    Precipitation dataset; loads the entire CONUS region without cropping.
+    Extension of the RainfallSpecifiedInference class to handle non-square data.
     """
 
-    def __init__(self, data_config: dict):
-        super().__init__(data_config)
-
-    def __getitem__(self, item):
-        date_ = self.precip_dates[item]
-        cpc_lr = self.read_cpc_daily_aggregate(date_)
-        if self.use_precomputed_mrms:
-            mrms = self.read_precomputed_mrms_daily_aggregate(date_)
+    def __init__(self, data_config: dict, specify_eval_targets: Optional[List[Dict[str, Any]]] = None):
+        shape_ = data_config.image_size
+        if type(shape_) == ListConfig:
+            h, w = shape_
+            assert len(shape_) == 2, "Image size must be a list of 2 integers."
+            max_len = max(h, w)
+            data_config.image_size = max_len  # override to be compatible with parent's init
+            super().__init__(data_config, specify_eval_targets)
+            self.img_size = shape_  # use actual image size for later use
+            yprint(f"Using non-square image size: {self.img_size}. Requires tiled diffusion model.")
+        elif shape_ == 'full':
+            data_config.image_size = 1  # override to be compatible with parent's init
+            super().__init__(data_config, specify_eval_targets)
+            self.img_size = 'full'
+            yprint("Using full image size. Requires tiled diffusion model.")
         else:
-            mrms = self.read_mrms_daily_aggregate(date_)
-        cpc_lr = self.truncate_dataarray(cpc_lr)
-        mrms = self.truncate_dataarray(mrms)
-        if self.use_precomputed_era5:
-            era5 = self.read_precomputed_era5_files(date_)
+            raise ValueError(f"Invalid image size: {shape_}")
+        data_config.image_size = shape_  # restore the original image size for later use
+        return
+
+    def select_crop(self, ds: xr.Dataset, location: dict) -> tuple[dict[str | Hashable, ndarray], dict[str, ndarray]]:
+        """
+        Overrides parent method to handle special instructions
+        * If the image size is square, use the parent method.
+        * If the image size is non-square, use the select_nonsquare_crop method.
+        * If the image size is 'full', return the full region.
+        """
+        if type(self.img_size) == int:
+            yprint(f"Using square image size: {self.img_size}. There is a problem with the configuration."
+                   f"Should have initialized with RainfallDatasetSquare instead.")
+            return super().select_crop(ds, location)
+        elif type(self.img_size) == ListConfig:
+            assert len(self.img_size) == 2, "Image size must be a list of 2 integers."
+            if self.img_size[0] == self.img_size[1]:
+                return super().select_crop(ds, location)
+            else:
+                return self.select_nonsquare_crop(ds, location)
+        elif self.img_size == 'full':
+            return self.build_batch(ds)
         else:
-            era5 = self.read_era5_files(date_)
+            raise ValueError(f"Invalid image size: {self.img_size}")
 
-        if self.use_density:
-            density = self.read_cpc_gauge_data(date_)
-            ds, valid_mask = self.merge_all_dataarrays(cpc_lr, mrms, era5, density, date_=date_)
-        else:
-            ds, valid_mask = self.merge_all_dataarrays(cpc_lr, mrms, era5, date_=date_)
-        batch, batch_coord = self.build_batch(ds) # MODIFIED, returns the entire xarray dataset, without cropping
-
-        batch = self.correct_for_nan(batch)
-        batch = self.normalize_precip(batch)
-        batch = self.normalize_era5(batch)
-        batch = self.normalize_density(batch)  # if needed
-        batch = self.cvt_to_tensor(batch)
-        # assume dimension matches
-        batch_coord['date'] = date_
-        return batch, batch_coord
-
-    def build_batch(self, ds: xr.Dataset) -> tuple[dict[str | Hashable, ndarray], dict[str, ndarray]]:
+    @staticmethod
+    def build_batch(ds: xr.Dataset) -> tuple[dict[str | Hashable, ndarray], dict[str, ndarray]]:
         """
         Returns the full region in the same format as the cropped version.
         """
@@ -80,23 +90,8 @@ class RainfallDatasetCONUS(DailyAggregateRainfallDataset):
 
         return batch, crop_coords
 
-class RainfallDatasetNonSquare(RainfallSpecifiedInference):
-    """
-    Extension of the RainfallSpecifiedInference class to handle non-square data.
-    """
-
-    def __init__(self, data_config: dict, specify_eval_targets: Optional[List[Dict[str, Any]]] = None):
-        shape_ = data_config.image_size
-        assert len(shape_) == 2
-        h, w = shape_
-        max_len = max(h, w)
-        data_config.image_size = max_len # override to be compatible with parent's init
-        super().__init__(data_config, specify_eval_targets)
-        self.img_size = shape_ # use actual image size for later use
-        yprint(f"Using non-square image size: {self.img_size}. Requires tiled diffusion model.")
-        return
-
-    def select_crop(self, ds: xr.Dataset, location: dict) -> tuple[dict[str | Hashable, ndarray], dict[str, ndarray]]:
+    def select_nonsquare_crop(self, ds: xr.Dataset, location: dict) \
+            -> tuple[dict[str | Hashable, ndarray], dict[str, ndarray]]:
         """
         Overrides parent method to handle non-square crops.
         Returns a set of crops where ERA5 and GT precip have the same FoV. Raw ERA5 have lower resolution than GT precip.
