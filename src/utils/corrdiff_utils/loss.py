@@ -527,7 +527,7 @@ class ResLoss:
             y_lr_res,
             sigma,
             labels,
-            lead_time_label=lead_time_label,
+            # lead_time_label=lead_time_label, # modified by Yuhao Liu
             augment_labels=augment_labels,
         )
 
@@ -618,12 +618,12 @@ class ResLoss:
             sigma,
             labels,
             global_index=global_index,
-            lead_time_label=lead_time_label,
+            # lead_time_label=lead_time_label,
             augment_labels=augment_labels,
         )
         loss = weight * ((D_yn - y) ** 2)
 
-        return loss
+        return loss, D_yn
 
 
 class VELoss_dfsr:

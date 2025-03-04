@@ -1,1 +1,1 @@
-from .lightning_modules import UNetLitModule
+from .lightning_modules import UNetLitModule, CorrDiffLiTModule

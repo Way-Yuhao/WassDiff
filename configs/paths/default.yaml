@@ -40,3 +40,6 @@ era5_filenames:
   wind_v: "pressure_level/v_component_of_wind_500_{}.nc"
 cpc_filenames: 'precip.{}.nc'
 interpolated_era5_filenames: 'era5_interp_merged_{}.nc'
+
+models:
+#  corrdiff_regression_v0: ${local.model_root_dir}/WassDiff-LiT/2025-03-01_12-06-50/checkpoints/epoch_999_step_3548.ckpt
