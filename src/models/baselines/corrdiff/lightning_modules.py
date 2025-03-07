@@ -147,6 +147,40 @@ class CorrDiffLiTModule(GenericPrecipDownscaleModule):
         step_output = {"batch_dict": batch_dict, "condition": condition}
         return step_output
 
+    def test_step(self, batch: Tuple[Dict, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
+        if self.skip_next_batch:  # determine whether to skip this batch
+            return {}
+        batch_dict, batch_coords, xr_low_res_batch, valid_mask = batch
+        condition, gt = self._generate_condition(batch_dict)
+        # ensemble prediction, if needed
+        if self.hparams.num_samples > 1 and condition.shape[0] > 1:
+            raise AttributeError('Ensemble prediction not supported for batch size > 1.')
+        elif self.hparams.num_samples > 1 and condition.shape[0] == 1:
+            condition = condition.repeat(self.hparams.num_samples, 1, 1, 1)
+
+        latent_shape = (condition.shape[0], 1, condition.shape[2], condition.shape[3])
+        prediction_mean = regression_step_only(net=self.regression_net, img_lr=condition, latents_shape=latent_shape,
+                                               lead_time_label=None)
+        prediction_residual = diffusion_step_batch(
+            net=self.net,
+            sampler_fn=self.sampler,
+            img_lr=condition,
+            img_shape=condition.shape[2:],
+            img_out_channels=1,
+            device=self.device,
+            hr_mean=None,
+            lead_time_label=None,
+        )
+        x = prediction_mean + prediction_residual
+        if self.hparams.num_samples == 1:
+            batch_dict['precip_output'] = x
+        else:
+            for i in range(self.hparams.num_samples):
+                batch_dict['precip_output_' + str(i)] = x[i, :, :, :]
+
+        return {'batch_dict': batch_dict, 'batch_coords': batch_coords, 'xr_low_res_batch': xr_low_res_batch,
+                'valid_mask': valid_mask}
+
     def sample(self, condition: torch.Tensor) -> torch.Tensor:
         latent_shape = (condition.shape[0], 1, condition.shape[2], condition.shape[3])
         prediction_mean = regression_step_only(net=self.regression_net, img_lr=condition, latents_shape=latent_shape,
