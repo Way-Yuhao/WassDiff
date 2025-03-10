@@ -2,6 +2,8 @@ from typing import Optional
 import traceback
 import socket
 from datetime import datetime
+
+from lightning.fabric.utilities import rank_zero_only
 from lightning.pytorch.callbacks import RichProgressBar, Callback
 from src.utils.helper import alert, monitor, monitor_complete, yprint
 
@@ -79,6 +81,7 @@ class SlackAlert(Callback):
         self.exception_occurred = True
         raise exception
 
+    @rank_zero_only
     def teardown(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", stage: str) -> None:
         """
         Send slack alert on successful teardown.
