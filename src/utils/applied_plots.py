@@ -84,7 +84,7 @@ def plot_qq_ensemble(num_samples, save_dir):
     if not p.exists(save_dir):
         os.makedirs(save_dir)
 
-    # WassDiff vs. SBDM
+    ## WassDiff vs. SBDM
     # ours_dir = p.join(parent_dir, 'emdw_0.2_bill_vis_16')
     # our_minus_dir = p.join(parent_dir, 'no_emd_ckpt22_bill_16')
     #
@@ -94,18 +94,31 @@ def plot_qq_ensemble(num_samples, save_dir):
     # ours_dir = p.join(parent_dir, 'emd_wop2_gaint_hail_il_16')
     # our_minus_dir = p.join(parent_dir, 'no_emd_ckpt22_gaint_hail_il_16')
 
-    # WassDiff vs. SBDM_r
+    ## WassDiff vs. SBDM_r
     # ours_dir = p.join(parent_dir, 'emdw_0.2_bill_vis_16')
     # our_minus_dir = p.join(parent_dir, 'sbdm_r_bill_16')
 
     # ours_dir = p.join(parent_dir, 'emdw_0.2_cold_front_16')
     # our_minus_dir = p.join(parent_dir, 'sbdm_r_cold_front_16')
 
-    ours_dir = p.join(parent_dir, 'emd_wop2_gaint_hail_il_16')
-    our_minus_dir = p.join(parent_dir, 'sbdm_r_gaint_hail_il_16')
+    # ours_dir = p.join(parent_dir, 'emd_wop2_gaint_hail_il_16')
+    # our_minus_dir = p.join(parent_dir, 'sbdm_r_gaint_hail_il_16')
+
+    ## WassDiff vs. SBDM_r vs. CorrDiff
+    ours_dir = p.join(parent_dir, 'emdw_0.2_bill_vis_16')
+    our_minus_dir = p.join(parent_dir, 'sbdm_r_bill_16')
+    corrdiff_dir = p.join(parent_dir, 'corrdiff_bill_16')
+
+    # ours_dir = p.join(parent_dir, 'emdw_0.2_cold_front_16')
+    # our_minus_dir = p.join(parent_dir, 'sbdm_r_cold_front_16')
+
+    # ours_dir = p.join(parent_dir, 'emd_wop2_gaint_hail_il_16')
+    # our_minus_dir = p.join(parent_dir, 'sbdm_r_gaint_hail_il_16')
+
 
     ours_df, axis_max = gather_quantile_data(ours_dir, dataset, method_name='ours')
     df_ours_minus, _ = gather_quantile_data(our_minus_dir, dataset, method_name='ours-')
+    df_corrdiff, _ = gather_quantile_data(corrdiff_dir, dataset, method_name='CorrDiff')
     cpc_inter, _ = gather_quantile_data(ours_dir, dataset, method_name='CPC_Int', batch_key='precip_up')
 
     # df = pd.concat([ours_df, ours_minus_dir], ignore_index=True)
@@ -123,6 +136,8 @@ def plot_qq_ensemble(num_samples, save_dir):
                  markers='o', errorbar='sd', linewidth=2)
     sns.lineplot(data=df_ours_minus, y='sample_quantile', x='gt_quantile', color='tab:purple',
                  markers='o', errorbar='sd', linewidth=2)
+    sns.lineplot(data=df_corrdiff, y='sample_quantile', x='gt_quantile', color='saddlebrown',
+                    markers='o', errorbar='sd', linewidth=2)
     # sns.lineplot(data=cpc_inter, y='sample_quantile', x='gt_quantile', color='tab:green')
 
     # plot y = x ideal line
@@ -138,7 +153,7 @@ def plot_qq_ensemble(num_samples, save_dir):
     plt.xlabel('Ground Truth (mm/day)')
     # plt.legend()
     if save_dir is not None:
-        plt.savefig(p.join(save_dir, f'hail_r.pdf'), dpi=600)
+        plt.savefig(p.join(save_dir, f'bill_corrdiff.svg'), dpi=600)
         plt.show()
     else:
         plt.show()
@@ -380,7 +395,8 @@ def build_hist_for_all_methods(ensemble_size: int, graph_to_build: str):
         # 'Ours-': '/home/yl241/data/rainfall_eval/logp1_ckpt22',
         'Ours-': '/home/yl241/data/rainfall_eval/sbdm_r',
         'CNN': '/home/yl241/data/rainfall_eval/cnn_baseline_r21ckpt',
-        'CGAN': '/home/yl241/data/rainfall_eval_LiT/CorrectorGAN_epoch_699'
+        'CGAN': '/home/yl241/data/rainfall_eval_LiT/CorrectorGAN_epoch_699',
+        'CorrDiff': '/home/yl241/data/rainfall_eval_LiT_rebuttal/CorrDiff_ep399'
     }
     label_colors = {
         'Ours': 'tab:blue',
@@ -388,7 +404,8 @@ def build_hist_for_all_methods(ensemble_size: int, graph_to_build: str):
         'CNN': 'tab:green',
         'CPC_Int': 'tab:orange',
         'Ground Truth': 'black',
-        'CGAN': 'tab:red'
+        'CGAN': 'tab:red',
+        'CorrDiff': 'saddlebrown'
     }
 
     ig, ax = plt.subplots(figsize=(8, 4.5))
@@ -662,7 +679,7 @@ def sample_bias_during_training():
     plt.show()
 
 def main():
-    # plot_qq_ensemble(16, '/home/yl241/workspace/NCSN/plt/qq')
+    plot_qq_ensemble(16, '/home/yl241/data/rainfall_plots_LiT/general/qq/')
     # dist_output_specific_sample()
     # dist_mean_prior()
     # dist_mean_val_set()
@@ -673,7 +690,7 @@ def main():
     # build_hist_for_all_methods(ensemble_size=13, graph_to_build='hist')
     # build_hist_for_all_methods(ensemble_size=13, graph_to_build='spectra')
 
-    plot_additional_vis()
+    # plot_additional_vis()
     # plot_additional_vis_era5_ablation()
     # sample_bias_during_training()
 if __name__ == '__main__':
