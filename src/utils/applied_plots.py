@@ -505,11 +505,15 @@ def build_hist_for_all_methods(ensemble_size: int, graph_to_build: str):
         plt.close()
 
 def plot_additional_vis():
-    output_dir = '/home/yl241/data/rainfall_eval_LiT/general/vis_with_cgan/'
+    output_dir = '/home/yl241/data/rainfall_eval_LiT/general/vis_with_corrdiff/'
+    if not p.exists(output_dir):
+        os.makedirs(output_dir)
+
     ours_dir = '/home/yl241/data/rainfall_eval/logp1_emd_ckpt21'
     ours_minus_dir = '/home/yl241/data/rainfall_eval/sbdm_r'
     cnn_dir = '/home/yl241/data/rainfall_eval/cnn_baseline_r21ckpt'
     cgan_dir = '/home/yl241/data/rainfall_eval_LiT/CorrectorGAN_epoch_699'
+    corrdiff_dir = '/home/yl241/data/rainfall_eval_LiT_rebuttal/CorrDiff_ep399'
     num_batches = 25
     batch_size = 12
     for i in tqdm(range(num_batches), desc='Plotting visualizations'):
@@ -518,12 +522,15 @@ def plot_additional_vis():
             ours_minus_batch = torch.load(p.join(ours_minus_dir, f'batch_{i}.pt'))
             cnn_batch = torch.load(p.join(cnn_dir, f'batch_{i}.pt'))
             cgan_batch = torch.load(p.join(cgan_dir, f'batch_{i}.pt'))
+            corrdiff_batch = torch.load(p.join(corrdiff_dir, f'batch_{i}.pt'))
+
 
             ours = ours_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
             ours_minus = ours_minus_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
             cnn = cnn_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
             cpc_inter = ours_batch['precip_up'][j][0, :, :].cpu().detach().numpy()
             cgan = cgan_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
+            corrdiff = corrdiff_batch['precip_output'][j][0, :, :].cpu().detach().numpy()
             gt = ours_batch['precip_gt'][j][0, :, :].cpu().detach().numpy()
 
             if gt.max() > 0:
@@ -535,18 +542,24 @@ def plot_additional_vis():
                 vmax_ = max(cpc_inter.max(), ours.max(), gt.max())
                 vmin_ = min(cpc_inter.min(), ours.min(), gt.min())
 
-            fig, axes = plt.subplots(1, 6, figsize=(22, 5))
+            fig, axes = plt.subplots(1, 7, figsize=(22, 5))
             im1 = axes[0].imshow(cpc_inter, cmap='viridis', vmin=vmin_, vmax=vmax_)
             im2 = axes[1].imshow(cnn, cmap='viridis', vmin=vmin_, vmax=vmax_)
             im3 = axes[2].imshow(cgan, cmap='viridis', vmin=vmin_, vmax=vmax_)
-            im4 = axes[3].imshow(ours_minus, cmap='viridis', vmin=vmin_, vmax=vmax_)
-            im5 = axes[4].imshow(ours, cmap='viridis', vmin=vmin_, vmax=vmax_)
-            im6 = axes[5].imshow(gt, cmap='viridis', vmin=vmin_, vmax=vmax_)
-            cbar = fig.colorbar(im5, ax=axes, shrink=0.55, pad=0.01)
-            cbar.set_label("Precipitation\n(mm/day)", fontsize=14)
+            im4 = axes[3].imshow(corrdiff, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im5 = axes[4].imshow(ours_minus, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im6 = axes[5].imshow(ours, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            im7 = axes[6].imshow(gt, cmap='viridis', vmin=vmin_, vmax=vmax_)
+            cbar = fig.colorbar(im5, ax=axes, shrink=0.45, pad=0.01)
+            cbar.set_label("Precipitation\n(mm/day)", fontsize=12)
             for ax in axes:
                 ax.axis('off')
-            plt.savefig(p.join(output_dir, f'batch_{i}_sample_{j}.pdf'),
+
+            # SVG only: Reduce the colorbar outline thickness
+            cbar.outline.set_linewidth(0.75)  # Set to a smaller value (default is ~1.5)
+            cbar.ax.tick_params(width=0.75)
+
+            plt.savefig(p.join(output_dir, f'batch_{i}_sample_{j}.svg'),
                         bbox_inches='tight', dpi=600, transparent=True)
             # plt.show()
             plt.close()
@@ -657,10 +670,10 @@ def main():
     # skill_vs_ensemble_size()
 
     # hist and spectra
-    build_hist_for_all_methods(ensemble_size=13, graph_to_build='hist')
+    # build_hist_for_all_methods(ensemble_size=13, graph_to_build='hist')
     # build_hist_for_all_methods(ensemble_size=13, graph_to_build='spectra')
 
-    # plot_additional_vis()
+    plot_additional_vis()
     # plot_additional_vis_era5_ablation()
     # sample_bias_during_training()
 if __name__ == '__main__':
