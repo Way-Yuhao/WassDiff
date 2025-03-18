@@ -31,6 +31,8 @@ Plotting functions to run AFTER inference has been completed for a particular se
 
 def gather_quantile_data(dir_path, dataset, method_name, batch_key='precip_output'):
     batch = torch.load(p.join(dir_path, 'batch.pt'))
+    if type(batch) is tuple:
+        batch = batch[0]
     batch = dataset.inverse_normalize_batch(batch)
 
     b = batch['precip_gt'].squeeze(0).cpu().numpy()
@@ -72,15 +74,15 @@ def plot_qq_ensemble(num_samples, save_dir):
     Plot samples together
     """
     sns.set_context('paper', font_scale=1.5)
-    with initialize(version_base=None, config_path="../configs", job_name="evaluation"):
-        config = compose(config_name="downscale_cpc_density")
-        config.data.condition_mode = 6  # alter if needed
-        config.data.image_size = 512
-        config.data.condition_size = 512
-        config.data.use_precomputed_era5 = False
-        config.data.use_precomputed_cpc = False
-    dataset = DailyAggregateRainfallDataset(config)
-    parent_dir = '/home/yl241/workspace/NCSN/plt/'
+    with initialize(version_base=None, config_path="../../configs/", job_name="evaluation"):
+        config = compose(config_name="train")
+        config.data.data_config.condition_mode = 6  # alter if needed
+        config.data.data_config.image_size = 512
+        config.data.data_config.condition_size = 512
+        config.data.data_config.use_precomputed_era5 = False
+        config.data.data_config.use_precomputed_cpc = False
+    dataset = DailyAggregateRainfallDataset(config.data.data_config)
+    parent_dir = '/home/yl241/data/rainfall_plots_LiT/'
     if not p.exists(save_dir):
         os.makedirs(save_dir)
 
@@ -111,9 +113,11 @@ def plot_qq_ensemble(num_samples, save_dir):
 
     # ours_dir = p.join(parent_dir, 'emdw_0.2_cold_front_16')
     # our_minus_dir = p.join(parent_dir, 'sbdm_r_cold_front_16')
+    # corrdiff_dir = p.join(parent_dir, 'corrdiff_cold_front_16')
 
     # ours_dir = p.join(parent_dir, 'emd_wop2_gaint_hail_il_16')
     # our_minus_dir = p.join(parent_dir, 'sbdm_r_gaint_hail_il_16')
+    # corrdiff_dir = p.join(parent_dir, 'corrdiff_giant_hill_16')
 
 
     ours_df, axis_max = gather_quantile_data(ours_dir, dataset, method_name='ours')
@@ -133,27 +137,30 @@ def plot_qq_ensemble(num_samples, save_dir):
     #             scatter_kws={'alpha': 0.1}, marker=".",x_estimator=np.mean)
 
     sns.lineplot(data=ours_df, y='sample_quantile', x='gt_quantile', color='tab:blue',
-                 markers='o', errorbar='sd', linewidth=2)
+                 markers='o', errorbar='sd', linewidth=0.5)
     sns.lineplot(data=df_ours_minus, y='sample_quantile', x='gt_quantile', color='tab:purple',
-                 markers='o', errorbar='sd', linewidth=2)
+                 markers='o', errorbar='sd', linewidth=0.5)
     sns.lineplot(data=df_corrdiff, y='sample_quantile', x='gt_quantile', color='saddlebrown',
-                    markers='o', errorbar='sd', linewidth=2)
+                    markers='o', errorbar='sd', linewidth=0.5)
     # sns.lineplot(data=cpc_inter, y='sample_quantile', x='gt_quantile', color='tab:green')
+
+    ax = plt.gca()
+    ax.tick_params(width=0.5, length=3)
 
     # plot y = x ideal line
     x = np.linspace(0, int(axis_max), 100)
-    sns.lineplot(x=x, y=x, color="k", ls="--", linewidth=2)
+    sns.lineplot(x=x, y=x, color="k", ls="--", linewidth=0.5)
     # plot dots
 
     # plt.xlim([0, axis_max])
     # plt.ylim([0, axis_max])
     sns.despine()
-    plt.title('Quantile-Quantile Plot')
+    # plt.title('Quantile-Quantile Plot')
     plt.ylabel('Output (mm/day)')
     plt.xlabel('Ground Truth (mm/day)')
     # plt.legend()
     if save_dir is not None:
-        plt.savefig(p.join(save_dir, f'bill_corrdiff.svg'), dpi=600)
+        plt.savefig(p.join(save_dir, f'bill_corrdiff.svg'), dpi=300, transparent=True)
         plt.show()
     else:
         plt.show()
