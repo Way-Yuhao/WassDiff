@@ -61,7 +61,7 @@ Model weights can be found at
 
 Quantitative evaluation can be done by running 
 ```python
-python src/eval.py trainer=gpu model=wassdiff experiment=eval_val_set ckpt_path=PATH_TO_MODEL_WEIGHTS name=NAME_OF_DIRECTORY
+python ./src/eval.py trainer=gpu model=wassdiff experiment=eval_val_set ckpt_path=PATH_TO_MODEL_WEIGHTS name=NAME_OF_DIRECTORY
 ```
 
 Set ckpt_path to the path of the model weights you want to evaluate, and name to the name of the directory 
@@ -73,7 +73,7 @@ Note that the evaluation results will be stored in `eval_set_root_dir` specified
 To generate sample (single or ensemble) on a specified region and date (requires input data to be downloaded), run
 
 ```python
-python src/eval.py trainer=gpu model=wassdiff experiment=specified_eval
+python ./src/eval.py model=wassdiff experiment=specified_eval
  ckpt_path=PATH_TO_MODEL_WEIGHTS name=NAME_OF_DIRECTORY
 ```
 
@@ -84,3 +84,10 @@ Note that the evaluation results will be stored in `specified_eval_root_dir` spe
 To adjust ensemble size, append `model.num_samples=ENSEMBLE_SIZE` to command above.
 You may modify the `lon`, `lat`, and `date` parameters in `configs/experiment/specified_eval.yaml` 
 to specify the region and date of interest.
+----------
+You can optioanlly use `tiled_diffusion` to generate larger images (such as to for the entire CONUS region).
+To do so, use `model=wassdiff_tiled` in the command below:
+```python
+python ./src/eval.py model=wassdiff experiment=specified_eval model=wassdiff_tiled ckpt_path=PATH_TO_MODEL_WEIGHTS name=NAME_OF_DIRECTORY
+```
+

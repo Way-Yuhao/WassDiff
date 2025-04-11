@@ -80,7 +80,5 @@ model_config:
     method: 'pc'
     predictor: 'reverse_diffusion'
     corrector: 'langevin'
-    sampling_batch_size: 4
-
-
+    sampling_batch_size: 12
 
