@@ -11,4 +11,4 @@ tiled_config:
   stride: 192  # the spacing between adjacent patche
   sf: 1 # scaling factor, DO NOT MODIFY
   batch_size: 6 # how many patches to process concurrently
-  model_size: 512 # for model initialization, DO NOT MODIFY
+  model_size: 1024 # for model initialization, (512 or 1024). 1024 for better performance.
