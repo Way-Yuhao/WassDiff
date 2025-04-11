@@ -36,7 +36,7 @@ class RainfallDatasetNonSquare(RainfallSpecifiedInference):
             yprint("Using full image size. Requires tiled diffusion model.")
         else:
             raise ValueError(f"Invalid image size: {shape_}")
-        data_config.image_size = shape_  # restore the original image size for later use
+        # data_config.image_size = 256  # FIXME: this should not be hardcoded restore the original image size for later use
         return
 
     def select_crop(self, ds: xr.Dataset, location: dict) -> tuple[dict[str | Hashable, ndarray], dict[str, ndarray]]:

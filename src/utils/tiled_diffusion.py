@@ -13,7 +13,7 @@ class TiledDiffusion:
                 - scale_factor (int): Default 1.
                 - batch_size (int): Default 12.
         """
-        self.patch_size = tiled_config['pch_size']
+        self.patch_size = tiled_config['patch_size']
         self.stride = tiled_config["stride"]
         self.sf = tiled_config["sf"]
         self.batch_size = tiled_config["batch_size"]
@@ -103,7 +103,7 @@ class TiledDiffusion:
                     pch_null_condition_list, idx_info_list = [], []
 
             # Process any remaining patches.
-            if len(pch_x_list) > 0:
+            if len(pch_x_list) > 0 and len(pch_x_list) < self.batch_size:
                 batch_pch_x = torch.cat(pch_x_list, dim=0)
                 batch_pch_condition = torch.cat(pch_condition_list, dim=0)
                 batch_pch_null_condition = (torch.cat(pch_null_condition_list, dim=0)

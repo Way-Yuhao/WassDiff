@@ -1,0 +1,347 @@
+from typing import Any, Dict, Tuple, Optional
+# import wandb
+import torch
+from src.models.precip_downscale.wassdiff import WassDiffLitModule
+
+# This is a class used to generate tiled_diffusion using Wassdiff Model.
+class WassDiffTiledLitModule(WassDiffLitModule):
+    """
+    This is a module for generating tiled diffusion images using the Wassdiff model.
+
+    This class modifies the image size in the model configuration temporarily to match
+    the tiled configuration during initialization. This allows the base model to be
+    initialized with dimensions optimized for tiled processing. After initialization,
+    it restores the original full canvas image size, preserving the capability to work
+    with the complete image later on.
+    """
+
+    def __init__(self, model_config: dict, optimizer_config: dict, tiled_config: dict, tiled_diffusion: bool,
+                 compile: bool,
+                  *args, **kwargs) -> None:
+        """
+        Initialize a `WassDiffTiledLitModule` instance with tiled diffusion capabilities.
+        Parameters:
+            model_config (dict): A dictionary containing the model configuration parameters.
+                Expected to have an attribute 'data.image_size' specifying the original image size.
+            optimizer_config (dict): A dictionary containing the optimizer configuration parameters.
+            tiled_config (dict): A dictionary containing the tiled diffusion configuration.
+                Must include a 'model_size' key for the temporary image size.
+            tiled_diffusion (bool): Indicates whether tiled diffusion should be used.
+            compile (bool): Flag to determine if the model should be compiled during initialization.
+            *args: Additional positional arguments for the parent class constructor.
+            **kwargs: Additional keyword arguments for the parent class constructor.
+        """
+        # if not isinstance(model_config.data.image_size, int):
+        original_image_size = model_config.data.image_size
+         #initialize model with model_size
+        model_config.data.image_size = tiled_config.model_size
+        super().__init__(model_config, optimizer_config, compile, *args, **kwargs)
+        # Restore the original full canvas image size for further usage
+        model_config.data.image_size = original_image_size
+        # else:
+        #     # If image_size is already an int, just call the parent's constructor
+        #     super().__init__(model_config, optimizer_config, compile, *args, **kwargs)
+
+        self.tiled_config = tiled_config
+        self.tiled_diffusion = tiled_diffusion
+        return
+
+    # def setup(self, stage: str) -> None:
+    #     """Lightning hook that is called at the beginning of fit (train + validate), validate,
+    #     test, or predict.
+    #
+    #     This is a good hook when you need to build models dynamically or adjust something about
+    #     them. This hook is called on every process when using DDP.
+    #
+    #     :param stage: Either `"fit"`, `"validate"`, `"test"`, or `"predict"`.
+    #     """
+    #     # Compile via JiT
+    #     if self.hparams.compile and stage == "fit":
+    #         raise NotImplementedError("JIT compilation not supported for training.")
+    #         self.net = torch.compile(self.net)
+
+    # def configure_optimizers(self) -> Dict[str, Any]:
+    #     """Choose what optimizers and learning-rate schedulers to use in your optimization.
+    #     Normally you'd need one. But in the case of GANs or similar you might have multiple.
+    #
+    #     Examples:
+    #         https://lightning.ai/docs/pytorch/latest/common/lightning_module.html#configure-optimizers
+    #
+    #     :return: A dict containing the configured optimizers and learning-rate schedulers to be used for training.
+    #     """
+    #     self.model_config.device = self.device
+    #
+    #     # Create data normalizer and its inverse
+    #     self.scaler = datasets.get_data_scaler(self.model_config)
+    #     self.inverse_scaler = datasets.get_data_inverse_scaler(self.model_config)
+    #
+    #     optimizer = losses.get_optimizer(self.optimizer_config, self.net.parameters())
+    #
+    #     ema = ExponentialMovingAverage(self.net.parameters(), decay=self.model_config.model.ema_rate)
+    #     self.state = dict(optimizer=optimizer, model=self.net, ema=ema, step=0)
+    #
+    #     # Setup SDEs
+    #     if self.model_config.training.sde.lower() == 'vpsde':
+    #         sde = sde_lib.VPSDE(beta_min=self.model_config.model.beta_min, beta_max=self.model_config.model.beta_max,
+    #                             N=self.model_config.model.num_scales)
+    #         sampling_eps = 1e-3
+    #     elif self.model_config.training.sde.lower() == 'subvpsde':
+    #         sde = sde_lib.subVPSDE(beta_min=self.model_config.model.beta_min, beta_max=self.model_config.model.beta_max,
+    #                                N=self.model_config.model.num_scales)
+    #         sampling_eps = 1e-3
+    #     elif self.model_config.training.sde.lower() == 'vesde':
+    #         sde = sde_lib.VESDE(sigma_min=self.model_config.model.sigma_min,
+    #                             sigma_max=self.model_config.model.sigma_max,
+    #                             N=self.model_config.model.num_scales)
+    #         sampling_eps = 1e-5
+    #     else:
+    #         raise NotImplementedError(f"SDE {self.hparams.sde} unknown.")
+    #
+    #     # Build one-step training and evaluation functions
+    #     optimize_fn = losses.optimization_manager(self.optimizer_config)
+    #     continuous = self.model_config.training.continuous
+    #     reduce_mean = self.model_config.training.reduce_mean
+    #     likelihood_weighting = self.model_config.training.likelihood_weighting
+    #     self.use_emd = self.model_config.training.use_emd
+    #     emd_weight = self.model_config.training.emd_weight
+    #     self.train_step_fn = losses.get_step_fn(sde, train=True, optimize_fn=optimize_fn,
+    #                                             reduce_mean=reduce_mean, continuous=continuous,
+    #                                             likelihood_weighting=likelihood_weighting,
+    #                                             use_emd=self.use_emd, emd_weight=emd_weight,
+    #                                             compute_rescaled_emd=self.model_config.training.compute_rescaled_emd,
+    #                                             emd_rescale_c=self.model_config.data.precip_rescale_c)
+    #
+    #     self.eval_step_fn = losses.get_step_fn(sde, train=False, optimize_fn=optimize_fn,
+    #                                            reduce_mean=reduce_mean, continuous=continuous,
+    #                                            likelihood_weighting=likelihood_weighting,
+    #                                            use_emd=self.use_emd, emd_weight=emd_weight,
+    #                                            compute_rescaled_emd=self.model_config.training.compute_rescaled_emd,
+    #                                            emd_rescale_c=self.model_config.data.precip_rescale_c)
+    #
+    #     # Building sampling functions
+    #     sampling_shape = (self.model_config.sampling.sampling_batch_size, self.model_config.data.num_channels,
+    #                       self.model_config.data.image_size, self.model_config.data.image_size)
+    #     # s = self.model_config.sampling.sampling_batch_size
+    #     # num_train_steps = self.model_config.training.n_iters
+    #
+    #     return optimizer
+    #
+    # def configure_sampler(self) -> None:
+    #     """
+    #     Configure sampler at inference time.
+    #     """
+    #     # TODO: verify
+    #     if self.hparams.pytorch_ckpt_path is not None:
+    #         score_model = self.net
+    #         optimizer = get_optimizer(self.optimizer_config, score_model.parameters())
+    #         ema = ExponentialMovingAverage(score_model.parameters(),
+    #                                        decay=self.model_config.model.ema_rate)
+    #         state = dict(step=0, optimizer=optimizer, model=score_model, ema=ema)
+    #         state = restore_checkpoint(self.hparams.pytorch_ckpt_path, state, self.device)
+    #         ema.copy_to(score_model.parameters())
+    #         yprint(f"\nRestored model from Pytorch ckpt: {self.hparams.pytorch_ckpt_path}")
+    #
+    #     # sigmas = mutils.get_sigmas(self.model_config) # not used here or NCSN codebase
+    #     self.scaler = datasets.get_data_scaler(self.model_config)
+    #     self.inverse_scaler = datasets.get_data_inverse_scaler(self.model_config)
+    #     sde = 'VESDE'  # @param ['VESDE', 'VPSDE', 'subVPSDE'] {"type": "string"}
+    #     if sde.lower() == 'vesde':
+    #         sde = sde_lib.VESDE(sigma_min=self.model_config.model.sigma_min,
+    #                             sigma_max=self.model_config.model.sigma_max,
+    #                             N=self.model_config.model.num_scales)
+    #     else:
+    #         raise NotImplementedError()
+    #
+    #     # FIXME: is this used at all?
+    #     # resolution_ratio = int(self.model_config.data.image_size / self.model_config.data.condition_size)
+    #     predictor = ReverseDiffusionPredictor  # @param ["EulerMaruyamaPredictor", "AncestralSamplingPredictor", "ReverseDiffusionPredictor", "None"] {"type": "raw"}
+    #     corrector = LangevinCorrector  # @param ["LangevinCorrector", "AnnealedLangevinDynamics", "None"] {"type": "raw"}
+    #     self.pc_upsampler = controllable_generation.get_pc_cfg_upsampler(sde,
+    #                                                                      predictor, corrector,
+    #                                                                      self.inverse_scaler,
+    #                                                                      snr=self.model_config.sampling.snr,
+    #                                                                      n_steps=self.model_config.sampling.n_steps_each,
+    #                                                                      probability_flow=self.model_config.sampling.probability_flow,
+    #                                                                      continuous=self.model_config.training.continuous,
+    #                                                                      denoise=True)
+    #
+    # def on_fit_start(self) -> None:
+    #     """Lightning hook that is called when the fit begins."""
+    #
+    #     # self.sampling_null_condition = self._generate_null_condition()
+    #     self.state['optimizer'] = self.optimizers()  # TODO: verify
+    #
+    # def forward(self, x: torch.Tensor) -> torch.Tensor:
+    #     """Perform a forward pass through the model `self.net`.
+    #
+    #     :param x: A tensor of images.
+    #     :return: A tensor of images.
+    #     """
+    #     return self.net(x)
+    #
+    # def training_step(
+    #         self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
+    #     """Perform a single training step on a batch of data from the training set.
+    #
+    #     :param batch: A batch of data (a tuple) containing the input tensor of images and target
+    #         labels.
+    #     :param batch_idx: The index of the current batch.
+    #     :return: A tensor of losses between model predictions and targets.
+    #     """
+    #     batch_dict, _ = batch  # discard coordinates
+    #     condition, gt = self._generate_condition(batch_dict)
+    #     condition, context_mask = self._dropout_condition(condition)
+    #     loss, loss_dict = self.train_step_fn(self.state, gt, condition)
+    #
+    #     self.log("train/loss", loss, on_step=True, on_epoch=False, prog_bar=False, batch_size=condition.shape[0])
+    #     if self.use_emd:
+    #         self.log("train/emd_loss", loss_dict['emd_loss'], on_step=True, on_epoch=False, prog_bar=False,
+    #                  batch_size=condition.shape[0])
+    #         self.log("train/score_loss", loss_dict['score_loss'], on_step=True, on_epoch=False, prog_bar=False,
+    #                  batch_size=condition.shape[0])
+    #     step_output = {"batch_dict": batch_dict, "loss_dict": loss_dict, 'condition': condition,
+    #                    'context_mask': context_mask}
+    #     return step_output
+    #
+    # def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
+    #     """Perform a single validation step on a batch of data from the validation set.
+    #
+    #     :param batch: A batch of data (a tuple) containing the input tensor of images and target
+    #         labels.
+    #     :param batch_idx: The index of the current batch.
+    #     """
+    #     batch_dict, _ = batch  # discard coordinates
+    #     condition, gt = self._generate_condition(batch_dict)
+    #     eval_loss, _ = self.eval_step_fn(self.state, gt, condition)
+    #     self.log("val/loss", eval_loss, on_step=False, on_epoch=True, prog_bar=False,
+    #              batch_size=condition.shape[0], sync_dist=True)
+    #     step_output = {"batch_dict": batch_dict, "condition": condition}
+    #     return step_output
+    #
+    # def on_test_start(self):
+    #     self.configure_sampler()
+    #     if self.hparams.compile:
+    #         self.net = torch.compile(self.net)
+
+    def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
+        """Perform a single test step on a batch of data from the test set.
+
+        :param batch: A batch of data (a tuple) containing the input tensor of images and target labels.
+        :param batch_idx: The index of the current batch.
+        """
+        if self.skip_next_batch:  # determine whether to skip this batch
+            return {}
+
+        batch_dict, batch_coords, xr_low_res_batch, valid_mask = batch  # discard coordinates FIXME
+        condition, gt = self._generate_condition(batch_dict)
+
+        # ensemble prediction, if needed
+        if self.hparams.num_samples > 1 and condition.shape[0] > 1:
+            raise AttributeError('Ensemble prediction not supported for batch size > 1.')
+        elif self.hparams.num_samples > 1 and condition.shape[0] == 1:
+            condition = condition.repeat(self.hparams.num_samples, 1, 1, 1)
+
+        null_condition = torch.ones_like(condition) * self.model_config.model.null_token
+        batch_size = condition.shape[0]
+
+        # Determine output dimensions based on image_size type.
+        if not isinstance(self.model_config.data.image_size, int):
+            h = condition.shape[2]
+            w=  condition.shape[3]
+        else:
+            h = w = self.model_config.data.image_size
+
+        if self.hparams.bypass_sampling:
+            batch_dict['precip_output'] = torch.zeros_like(gt)
+        else:
+            x = self.pc_upsampler(
+                model=self.net,
+                condition=self.scaler(condition),
+                w=self.model_config.model.w_guide,
+                out_dim=(batch_size, 1, h, w),
+                save_dir=None,
+                null_condition=null_condition,
+                display_pbar=self.hparams.display_sampling_pbar,
+                gt=gt,
+                null=self.model_config.model.null_token,
+                tiled_diffusion=self.tiled_diffusion,  # new config parameter
+                tiled_config=self.tiled_config  # new config parameter
+            )
+            if self.hparams.num_samples == 1:
+                    batch_dict['precip_output'] = x
+            else:
+                for i in range(self.hparams.num_samples):
+                    batch_dict['precip_output_' + str(i)] = x[i, :, :, :]
+                # print(batch_dict)
+                # print(batch_coords)
+                # print(xr_low_res_batch)
+                # print(valid_mask)
+        return {'batch_dict': batch_dict, 'batch_coords': batch_coords, 'xr_low_res_batch': xr_low_res_batch,
+                'valid_mask': valid_mask}
+
+    # def _generate_null_condition(self):
+    #     s = self.model_config.sampling.sampling_batch_size
+    #
+    #     # Determine height and width based on image_size type.
+    #     if not isinstance(self.model_config.data.image_size, int):
+    #         h = self.model_config.data.image_size[0]
+    #         w=  self.model_config.data.image_size[1]
+    #     else:
+    #         h = w = self.model_config.data.image_size
+    #
+    #     if self.model_config.data.condition_mode in [1, 4]:
+    #         sampling_null_condition = torch.ones(
+    #             (s, self.model_config.data.num_channels, self.model_config.data.condition_size,
+    #              self.model_config.data.condition_size)) * self.model_config.model.null_token
+    #     elif self.model_config.data.condition_mode in [2, 5, 6]:
+    #         sampling_null_condition = torch.ones(
+    #             (s, self.model_config.data.num_channels + self.model_config.data.num_context_chs, h, w)
+    #         ) * self.model_config.model.null_token
+    #     elif self.model_config.data.condition_mode == 3:
+    #         sampling_null_condition = torch.ones(
+    #             (s, self.model_config.data.num_context_chs, h, w)
+    #         ) * self.model_config.model.null_token
+    #     return sampling_null_condition.to(self.device)
+    #
+    # def _generate_condition(self, batch_dict: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+    #     y = self.scaler(batch_dict['precip_gt'])  # .to(config.device))
+    #
+    #     if self.model_config.data.condition_mode == 0:
+    #         raise AttributeError()  # deprecated
+    #     elif self.model_config.data.condition_mode == 1:
+    #         condition = batch_dict['precip_up']
+    #     elif self.model_config.data.condition_mode in [2, 6]:
+    #         exclude_keys = ['precip_lr', 'precip_gt']
+    #         tensors_to_stack = [tensor for key, tensor in batch_dict.items() if key not in exclude_keys]
+    #         stacked_tensor = torch.cat(tensors_to_stack, dim=1)
+    #         condition = stacked_tensor
+    #     elif self.model_config.data.condition_mode == 3:
+    #         exclude_keys = ['precip_lr', 'precip_gt', 'precip_up']
+    #         tensors_to_stack = [tensor for key, tensor in batch_dict.items() if key not in exclude_keys]
+    #         stacked_tensor = torch.cat(tensors_to_stack, dim=1)
+    #         condition = stacked_tensor
+    #     elif self.model_config.data.condition_mode == 4:
+    #         condition = batch_dict['precip_masked']
+    #     elif self.model_config.data.condition_mode == 5:
+    #         exclude_keys = ['precip_gt', 'mask']
+    #         tensors_to_stack = [tensor for key, tensor in batch_dict.items() if key not in exclude_keys]
+    #         stacked_tensor = torch.cat(tensors_to_stack, dim=1)
+    #         condition = stacked_tensor
+    #     else:
+    #         raise AttributeError()
+    #     return condition, y
+    #
+    # def _dropout_condition(self, condition: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    #     # implement dropout
+    #     context_mask = torch.bernoulli(torch.zeros(condition.shape[0]) + (1 - self.model_config.model.drop_prob))
+    #     context_mask = context_mask[:, None, None, None]  # shape: (batch_size, 1, 1, 1)
+    #     context_mask = context_mask.to(self.device)  # shape: (batch_size,)
+    #     condition = condition * context_mask  # shape: (batch_size, c, h, w)
+    #     null_token_mask = torch.zeros_like(context_mask, device=self.device)
+    #     null_token_mask[context_mask == 0] = self.model_config.model.null_token  # set to null token
+    #     condition = condition + null_token_mask
+    #     return condition, context_mask
+    #
+
+if __name__ == "__main__":
+    _ = WassDiffTiledLitModule(None, None, None, None)

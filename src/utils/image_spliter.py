@@ -139,7 +139,6 @@ class ImageSpliterTh:
         else:
             h_start, h_end, w_start, w_end = index_infos
 
-
         self.im_res[:, :, h_start:h_end, w_start:w_end] += pch_res
         self.pixel_count[:, :, h_start:h_end, w_start:w_end] += 1
 
@@ -162,8 +161,6 @@ class ImageSpliterTh:
     def gather(self):
         assert torch.all(self.pixel_count != 0)
         return self.im_res.div(self.pixel_count)
-
-
 
     def reset_accumulators(self):
         self.im_res.zero_()

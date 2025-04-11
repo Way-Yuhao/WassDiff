@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 from src.utils.ncsn_utils.sampling import NoneCorrector, NonePredictor, shared_corrector_update_fn, shared_predictor_update_fn
 import functools
 from rich.progress import track
-from src.utils.TiledDiffusion import TiledDiffusion  # ensure this module is available in your project
+from src.utils.tiled_diffusion import TiledDiffusion  # ensure this module is available in your project
 from src.utils.image_spliter import ImageSpliterTh
 # from src.utils.metrics import calc_emd
 # from losses import sliced_wasserstein_distance
@@ -336,7 +336,7 @@ def get_pc_cfg_upsampler(sde, predictor, corrector, inverse_scaler, snr,
                 noise = x.clone()
                 timesteps = torch.linspace(sde.T, eps, sde.N)
 
-                # If tiled diffusion is enabled, delegate to the helper class.
+                # If tiled diffusion is enabled, call the helper class.
                 if tiled_diffusion and tiled_config is not None:
                     # Pass the precomputed objects along with the update functions.
                     tiled_diffuser = TiledDiffusion(tiled_config)
