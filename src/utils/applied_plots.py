@@ -67,6 +67,30 @@ def gather_quantile_data(dir_path, dataset, method_name, batch_key='precip_outpu
     return df, axis_max
 
 
+def calc_mppe_ensemble_mean(dir_path, dataset, batch_key='precip_output'):
+    # Load the batch and inverse-normalize it
+    batch = torch.load(p.join(dir_path, 'batch.pt'))
+    if isinstance(batch, tuple):
+        batch = batch[0]
+    batch = dataset.inverse_normalize_batch(batch)
+    # Extract ground truth
+    gt = batch['precip_gt'].squeeze(0).cpu().numpy()
+    # Gather ensemble outputs based on the batch_key
+    sample_keys = [k for k in batch.keys() if batch_key in k]
+    outputs = []
+    for key in sample_keys:
+        output = batch[key].squeeze(0).cpu().numpy()
+        outputs.append(output)
+    # Compute the ensemble mean field pixel-wise
+    ensemble_mean = np.mean(np.stack(outputs, axis=0), axis=0)
+    # Compute the 99.9th percentiles
+    ensemble_999 = np.percentile(ensemble_mean, 99.9)
+    gt_999 = np.percentile(gt, 99.9)
+    # Compute MPPE; since it's a scalar difference, this is equivalent to the absolute error
+    mppe = np.sqrt(np.mean((ensemble_999 - gt_999) ** 2))
+    return mppe
+
+
 def plot_qq_ensemble(num_samples, save_dir):
     """
     Quantile-Quantile Plot
@@ -107,17 +131,17 @@ def plot_qq_ensemble(num_samples, save_dir):
     # our_minus_dir = p.join(parent_dir, 'sbdm_r_gaint_hail_il_16')
 
     ## WassDiff vs. SBDM_r vs. CorrDiff
-    ours_dir = p.join(parent_dir, 'emdw_0.2_bill_vis_16')
-    our_minus_dir = p.join(parent_dir, 'sbdm_r_bill_16')
-    corrdiff_dir = p.join(parent_dir, 'corrdiff_bill_16')
+    # ours_dir = p.join(parent_dir, 'emdw_0.2_bill_vis_16')
+    # our_minus_dir = p.join(parent_dir, 'sbdm_r_bill_16')
+    # corrdiff_dir = p.join(parent_dir, 'corrdiff_bill_16')
 
     # ours_dir = p.join(parent_dir, 'emdw_0.2_cold_front_16')
     # our_minus_dir = p.join(parent_dir, 'sbdm_r_cold_front_16')
     # corrdiff_dir = p.join(parent_dir, 'corrdiff_cold_front_16')
 
-    # ours_dir = p.join(parent_dir, 'emd_wop2_gaint_hail_il_16')
-    # our_minus_dir = p.join(parent_dir, 'sbdm_r_gaint_hail_il_16')
-    # corrdiff_dir = p.join(parent_dir, 'corrdiff_giant_hill_16')
+    ours_dir = p.join(parent_dir, 'emd_wop2_gaint_hail_il_16')
+    our_minus_dir = p.join(parent_dir, 'sbdm_r_gaint_hail_il_16')
+    corrdiff_dir = p.join(parent_dir, 'corrdiff_giant_hill_16')
 
 
     ours_df, axis_max = gather_quantile_data(ours_dir, dataset, method_name='ours')
@@ -125,16 +149,12 @@ def plot_qq_ensemble(num_samples, save_dir):
     df_corrdiff, _ = gather_quantile_data(corrdiff_dir, dataset, method_name='CorrDiff')
     cpc_inter, _ = gather_quantile_data(ours_dir, dataset, method_name='CPC_Int', batch_key='precip_up')
 
-    # df = pd.concat([ours_df, ours_minus_dir], ignore_index=True)
-
-    # Plot a single scatterplot using the main DataFrame
-    # sns.scatterplot(data=df, x='sample_quantile', y='gt_quantile', linewidth=0, alpha=0.7)
-    # sns.lmplot(data=df, x='sample_quantile', y='gt_quantile',
-    #            order=3, hue='method', markers='.',
-    #            scatter_kws={'alpha': 0.1})
-
-    # sns.regplot(data=df_ours_minus, y='sample_quantile', x='gt_quantile', order=3,
-    #             scatter_kws={'alpha': 0.1}, marker=".",x_estimator=np.mean)
+    mppe_ours = calc_mppe_ensemble_mean(ours_dir, dataset)
+    mppe_ours_minus = calc_mppe_ensemble_mean(our_minus_dir, dataset)
+    mppe_corrdiff = calc_mppe_ensemble_mean(corrdiff_dir, dataset)
+    print(f'MPPE for ours: {mppe_ours}')
+    print(f'MPPE for ours-: {mppe_ours_minus}')
+    print(f'MPPE for CorrDiff: {mppe_corrdiff}')
 
     sns.lineplot(data=ours_df, y='sample_quantile', x='gt_quantile', color='tab:blue',
                  markers='o', errorbar='sd', linewidth=0.5)
@@ -533,12 +553,16 @@ def plot_additional_vis():
     if not p.exists(output_dir):
         os.makedirs(output_dir)
 
-    ours_dir = '/home/yl241/data/rainfall_eval/logp1_emd_ckpt21'
-    ours_minus_dir = '/home/yl241/data/rainfall_eval/sbdm_r'
-    cnn_dir = '/home/yl241/data/rainfall_eval/cnn_baseline_r21ckpt'
-    cgan_dir = '/home/yl241/data/rainfall_eval_LiT/CorrectorGAN_epoch_699'
+    # ours_dir = '/home/yl241/data/rainfall_eval/logp1_emd_ckpt21'
+    # ours_minus_dir = '/home/yl241/data/rainfall_eval/sbdm_r'
+    # cnn_dir = '/home/yl241/data/rainfall_eval/cnn_baseline_r21ckpt'
+    # cgan_dir = '/home/yl241/data/rainfall_eval_LiT/CorrectorGAN_epoch_699'
+    ours_dir = '/home/yl241/data/rainfall_eval_LiT_rebuttal/logp1_emd_ckpt21'
+    ours_minus_dir = '/home/yl241/data/rainfall_eval_LiT_rebuttal/sbdm_r'
+    cnn_dir = '/home/yl241/data/rainfall_eval_LiT_rebuttal/cnn_baseline_ckpt21r_rebuttal'
+    cgan_dir = '/home/yl241/data/rainfall_eval_LiT_rebuttal/CorrectorGAN_epoch_699'
     corrdiff_dir = '/home/yl241/data/rainfall_eval_LiT_rebuttal/CorrDiff_ep399'
-    num_batches = 25
+    num_batches = 40
     batch_size = 12
     for i in tqdm(range(num_batches), desc='Plotting visualizations'):
         for j in range(batch_size):
@@ -686,7 +710,7 @@ def sample_bias_during_training():
     plt.show()
 
 def main():
-    plot_qq_ensemble(16, '/home/yl241/data/rainfall_plots_LiT/general/qq/')
+    # plot_qq_ensemble(16, '/home/yl241/data/rainfall_plots_LiT/general/qq/')
     # dist_output_specific_sample()
     # dist_mean_prior()
     # dist_mean_val_set()
@@ -697,7 +721,7 @@ def main():
     # build_hist_for_all_methods(ensemble_size=13, graph_to_build='hist')
     # build_hist_for_all_methods(ensemble_size=13, graph_to_build='spectra')
 
-    # plot_additional_vis()
+    plot_additional_vis()
     # plot_additional_vis_era5_ablation()
     # sample_bias_during_training()
 if __name__ == '__main__':

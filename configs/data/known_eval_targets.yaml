@@ -11,6 +11,10 @@ known_eval_targets:
       - date: '20150611'
         lon: 271
         lat: 41.4553
+    hurricane_harvey: # EVENT IS IN TRAINING SET. FOR VISUALIZATION ONLY.
+      - date: '20170826'
+        lon: 264
+        lat: 29
 
     ##### historical examples ####
     southeast_texas_storm:
