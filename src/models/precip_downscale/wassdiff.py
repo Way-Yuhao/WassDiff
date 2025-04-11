@@ -47,7 +47,7 @@ class WassDiffLitModule(LightningModule):
         self.train_step_fn = None
         self.eval_step_fn = None
         self.sampling_fn = None  # sampling function used during training (for displaying conditional samples)
-        self.pc_upsampler = None  # sampling function used during inference
+        self.pc_upsampler = None  # sampling function used during inference (Predictor-Corrector upsampler)
 
         # internal flags
         self.automatic_optimization = False
@@ -131,6 +131,8 @@ class WassDiffLitModule(LightningModule):
         # Building sampling functions
         sampling_shape = (self.model_config.sampling.sampling_batch_size, self.model_config.data.num_channels,
                           self.model_config.data.image_size, self.model_config.data.image_size)
+        self.sampling_fn = sampling.get_sampling_fn(self.model_config, sde, sampling_shape, self.inverse_scaler,
+                                                    sampling_eps)
         # s = self.model_config.sampling.sampling_batch_size
         # num_train_steps = self.model_config.training.n_iters
 
@@ -189,8 +191,7 @@ class WassDiffLitModule(LightningModule):
         """
         return self.net(x)
 
-    def training_step(
-            self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
+    def training_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
         """Perform a single training step on a batch of data from the training set.
 
         :param batch: A batch of data (a tuple) containing the input tensor of images and target
@@ -270,6 +271,19 @@ class WassDiffLitModule(LightningModule):
         return {'batch_dict': batch_dict, 'batch_coords': batch_coords, 'xr_low_res_batch': xr_low_res_batch,
                 'valid_mask': valid_mask}
 
+
+    def sample(self, condition: torch.Tensor) -> torch.Tensor:
+        """
+        Runs sampling fn when given condition tensor. No further trimming or processing is performance.
+        Note that sampling fn is NOT the full Predictor-Corrector Sampler (more accurate).
+        This is only intended to use during validation to gather quick samples.
+        Usage at test time is not recommended.
+        """
+        config = self.model_config
+        sampling_null_condition = self.sampling_null_condition
+        sample, n = self.sampling_fn(self.net, condition=condition, w=config.model.w_guide,
+                                     null_condition=sampling_null_condition)
+        return sample
     def _generate_null_condition(self):
         # generate null condition for sampling
         s = self.model_config.sampling.sampling_batch_size

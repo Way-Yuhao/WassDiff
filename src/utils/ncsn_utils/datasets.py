@@ -21,21 +21,13 @@
 
 
 def get_data_scaler(config):
-    # """Data normalizer. Assume data are always in [0, 1]."""
-    # if config.data.centered:
-    #     # Rescale to [-1, 1]
-    #     return lambda x: x * 2. - 1.
-    # else:
-    #     return lambda x: x
-
     """Data normalizer. Assume data are always in [0, 1]."""
     if config.data.centered:
-        # Rescale to [-1, 1] without modifying the original tensor
-        return lambda x: x.clone() * 2. - 1.
+        # Rescale to [-1, 1]
+        return lambda x: x * 2. - 1.
     else:
-        # Return x without modifying the original tensor
-        return lambda x: x.clone()
-    ##modified
+        return lambda x: x
+
 
 def get_data_inverse_scaler(config):
     """Inverse data normalizer."""
