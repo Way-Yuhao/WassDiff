@@ -38,6 +38,7 @@ class EvalOnDataset(Callback):
         :param peak_mesoscale_threshold: Threshold for peak mesoscale
         :param override_batch_idx: Override batch_idx with the one specified in input (use for DDP only). Requires
         dataloader to provide batch_idx in the input.
+        :param report_results_on_batch: At which batch to report the results; use None to disable
 
         """
         super().__init__()

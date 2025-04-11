@@ -1,0 +1,21 @@
+_target_: src.models.baselines.cnn.cnn_module.CNNLitModule
+
+# additional params
+net:
+  _target_: src.models.baselines.cnn.cnn.SEVIRUNet
+#  in_channels: ${data.data_config.num_context_chs}
+#  out_channels: 1
+  start_filters: 32
+
+optimizer:
+  _target_: torch.optim.Adam
+  _partial_: true
+  lr: 2e-4
+  weight_decay: 0.0
+  betas: [0.9, 0.999]
+  eps: 1e-8
+
+criterion:
+  _target_: torch.nn.MSELoss
+
+compile: false

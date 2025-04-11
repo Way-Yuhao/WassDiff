@@ -1,0 +1,85 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+_target_: src.models.baselines.corrdiff.CorrDiffLiTModule
+compile: false
+num_samples: 1 # for inference, aka ensemble size
+
+net:
+  _target_: modulus.models.diffusion.EDMPrecondSR
+  img_channels: 4 # img_out_channels
+  gridtype: "sinusoidal"
+  N_grid_channels: 0 # 4
+  # from regression
+#  embedding_type: "zero"
+  checkpoint_level: 0 # songunet_checkpoint_level
+  img_resolution: ${data.data_config.image_size}
+  img_in_channels: 8
+  img_out_channels: ${data.data_config.num_channels}
+
+#  name: diffusion
+#    # Name of the preconditioner
+#  hr_mean_conditioning: false
+#    # High-res mean (regression's output) as additional condition
+  scale_cond_input: false
+  # If true, also scales the input conditioning
+  # For backward compatibility, this is true by default
+  # We recommend setting this to false for new training runs
+
+model_config: # to be compatible with WassDiff dataloader
+  data:
+    image_size: ${data.data_config.image_size}
+    condition_mode: ${data.data_config.condition_mode}
+    num_channels: ${data.data_config.num_channels}
+    num_context_chs: ${data.data_config.num_context_chs}
+    condition_size: ${data.data_config.condition_size}
+    centered: ${data.data_config.centered}
+    precip_rescale_c: ${data.data_config.precip_rescale_c}
+
+optimizer:
+  _target_: torch.optim.Adam
+  _partial_: true
+  lr: 0.0002
+  betas: [0.9,0.999]
+  eps: 1e-8
+
+criterion:
+  _target_: src.utils.corrdiff_utils.loss.ResLoss
+  _partial_: true
+#  regression_net: regression_net,
+  img_shape_x: ${data.data_config.image_size}
+  img_shape_y: ${data.data_config.image_size}
+  patch_shape_x: ${data.data_config.image_size} # patch_shape[1],
+  patch_shape_y: ${data.data_config.image_size} # patch_shape[0],
+  patch_num: 1 # patch_num,
+  hr_mean_conditioning: false # modified TODO: verify
+
+sampling: #  type: stochastic
+  _target_: modulus.utils.generative.stochastic_sampler
+  _partial_: true
+#  _partial_: true
+  boundary_pix: 2
+  overlap_pix: 4
+  img_shape: ${data.data_config.image_size}
+  patch_shape: ${data.data_config.image_size}
+
+
+  # or
+#  type: deterministic
+#  num_steps: 9
+#  # Number of denoising steps
+#  solver: euler
+#  # ODE solver [euler, heun]

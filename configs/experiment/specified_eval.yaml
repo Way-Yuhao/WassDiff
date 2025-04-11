@@ -4,6 +4,9 @@ defaults:
   - /callbacks: specified_eval
   - _self_
 
+model:
+  num_samples: 1  # ensemble size
+
 #### SPECIFY EVAL MODE ####
 event_name: storm_bill
 data:

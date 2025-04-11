@@ -1,0 +1,4 @@
+#python ./src/eval.py trainer.devices=[4] name=CorrDiff_bill experiment=specified_eval_corrdiff ckpt_path=/home/yl241/models/WassDiff-LiT/2025-03-04_16-04-52/checkpoints/epoch_399_step_2072.ckpt;
+python ./src/eval.py trainer.devices=[4] name=CorrDiff_hail event_name=giant_hill experiment=specified_eval_corrdiff ckpt_path=/home/yl241/models/WassDiff-LiT/2025-03-04_16-04-52/checkpoints/epoch_399_step_2072.ckpt
+
+python ./src/eval.py trainer.devices=[4] name=CorrDiff_harvey event_name=hurricane_harvey experiment=specified_eval_corrdiff ckpt_path=/home/yl241/models/WassDiff-LiT/2025-03-04_16-04-52/checkpoints/epoch_399_step_2072.ckpt

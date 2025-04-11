@@ -1,0 +1,18 @@
+# @package _global_
+
+defaults:
+  - specified_eval
+  - override /model: baseline_corrdiff_diffusion
+  - _self_
+
+model:
+  num_samples: 16  # ensemble size
+  sampling:
+    img_shape: 512
+    patch_shape: 512
+  regression_net_ckpt: ${local.model_root_dir}/WassDiff-LiT/2025-03-01_12-06-50/checkpoints/epoch_999_step_3548.pt
+  model_config:
+    data:
+      image_size: 256
+  net:
+    img_resolution: 256
