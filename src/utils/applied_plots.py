@@ -4,6 +4,7 @@ import os.path as p
 import numpy as np
 # import xarray as xr
 import seaborn as sns
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pandas as pd
 import torch
@@ -91,7 +92,38 @@ def calc_mppe_ensemble_mean(dir_path, dataset, batch_key='precip_output'):
     return mppe
 
 
-def plot_qq_ensemble(num_samples, save_dir):
+def plot_qq_wrapper():
+    data_dir = '/home/yl241/data/rainfall_plots_LiT/'
+    save_dir = '/home/yl241/data/rainfall_plots_LiT/general/qq/'
+
+    storm_bill_dir = {
+        'ours': p.join(data_dir, 'emdw_0.2_bill_vis_16'),
+        'ours_minus': p.join(data_dir, 'sbdm_r_bill_16'),
+        'corrdiff': p.join(data_dir, 'corrdiff_bill_16')
+    }
+
+    cold_front_dir = {
+        'ours': p.join(data_dir, 'emdw_0.2_cold_front_16'),
+        'ours_minus': p.join(data_dir, 'sbdm_r_cold_front_16'),
+        'corrdiff': p.join(data_dir, 'corrdiff_cold_front_16')
+    }
+
+    giant_hail_dir = {
+        'ours': p.join(data_dir, 'emd_wop2_gaint_hail_il_16'),
+        'ours_minus': p.join(data_dir, 'sbdm_r_gaint_hail_il_16'),
+        'corrdiff': p.join(data_dir, 'corrdiff_giant_hill_16')
+    }
+    # plot_qq_ensemble(storm_bill_dir, save_dir, output_fname='bill_corrdiff')
+    # plot_qq_ensemble(cold_front_dir, save_dir, output_fname='cold_front_corrdiff')
+    # plot_qq_ensemble(giant_hail_dir, save_dir, output_fname='giant_hail_corrdiff')
+
+    plot_qq_ensemble_zoomed(storm_bill_dir, save_dir, output_fname='bill_corrdiff_zoomed')
+    plot_qq_ensemble_zoomed(cold_front_dir, save_dir, output_fname='cold_front_corrdiff_zoomed')
+    plot_qq_ensemble_zoomed(giant_hail_dir, save_dir, output_fname='giant_hail_corrdiff_zoomed')
+    return
+
+
+def plot_qq_ensemble(input_data_dict: dict, save_dir: str, output_fname: str):
     """
     Quantile-Quantile Plot
     https://stackoverflow.com/questions/46935289/quantile-quantile-plot-using-seaborn-and-scipy
@@ -139,9 +171,13 @@ def plot_qq_ensemble(num_samples, save_dir):
     # our_minus_dir = p.join(parent_dir, 'sbdm_r_cold_front_16')
     # corrdiff_dir = p.join(parent_dir, 'corrdiff_cold_front_16')
 
-    ours_dir = p.join(parent_dir, 'emd_wop2_gaint_hail_il_16')
-    our_minus_dir = p.join(parent_dir, 'sbdm_r_gaint_hail_il_16')
-    corrdiff_dir = p.join(parent_dir, 'corrdiff_giant_hill_16')
+    # ours_dir = p.join(parent_dir, 'emd_wop2_gaint_hail_il_16')
+    # our_minus_dir = p.join(parent_dir, 'sbdm_r_gaint_hail_il_16')
+    # corrdiff_dir = p.join(parent_dir, 'corrdiff_giant_hill_16')
+
+
+    ours_dir, our_minus_dir, corrdiff_dir = (input_data_dict['ours'], input_data_dict['ours_minus'],
+                                              input_data_dict['corrdiff'])
 
 
     ours_df, axis_max = gather_quantile_data(ours_dir, dataset, method_name='ours')
@@ -156,12 +192,13 @@ def plot_qq_ensemble(num_samples, save_dir):
     print(f'MPPE for ours-: {mppe_ours_minus}')
     print(f'MPPE for CorrDiff: {mppe_corrdiff}')
 
-    sns.lineplot(data=ours_df, y='sample_quantile', x='gt_quantile', color='tab:blue',
-                 markers='o', errorbar='sd', linewidth=0.5)
+    plt.rcParams['svg.fonttype'] = 'none'
     sns.lineplot(data=df_ours_minus, y='sample_quantile', x='gt_quantile', color='tab:purple',
-                 markers='o', errorbar='sd', linewidth=0.5)
+                 markers='o', errorbar='sd', linewidth=1.0, err_kws={'edgecolor': 'none'})
     sns.lineplot(data=df_corrdiff, y='sample_quantile', x='gt_quantile', color='saddlebrown',
-                    markers='o', errorbar='sd', linewidth=0.5)
+                    markers='o', errorbar='sd', linewidth=1.0, err_kws={'edgecolor': 'none'})
+    sns.lineplot(data=ours_df, y='sample_quantile', x='gt_quantile', color='tab:blue',
+                 markers='o', errorbar='sd', linewidth=1.0, err_kws={'edgecolor': 'none'})
     # sns.lineplot(data=cpc_inter, y='sample_quantile', x='gt_quantile', color='tab:green')
 
     ax = plt.gca()
@@ -170,23 +207,90 @@ def plot_qq_ensemble(num_samples, save_dir):
     # plot y = x ideal line
     x = np.linspace(0, int(axis_max), 100)
     sns.lineplot(x=x, y=x, color="k", ls="--", linewidth=0.5)
-    # plot dots
+    for spine in ax.spines.values():
+        spine.set_linewidth(0.75)
 
-    # plt.xlim([0, axis_max])
-    # plt.ylim([0, axis_max])
+    # max_value = max(axis_max, ours_df.iloc[-1]['sample_quantile'], df_ours_minus.iloc[-1]['sample_quantile'],
+    #            df_corrdiff.iloc[-1]['sample_quantile'])
+    plt.xlim([0, axis_max])
+    plt.ylim([0, axis_max*1.3])
+    plt.gca().set_aspect(1 / 1.3, adjustable='box')
     sns.despine()
     # plt.title('Quantile-Quantile Plot')
-    plt.ylabel('Output (mm/day)')
-    plt.xlabel('Ground Truth (mm/day)')
+    plt.ylabel('Prediction (mm/day)')
+    plt.xlabel('Target (mm/day)')
     # plt.legend()
     if save_dir is not None:
-        plt.savefig(p.join(save_dir, f'bill_corrdiff.svg'), dpi=300, transparent=True)
+        plt.savefig(p.join(save_dir, f'{output_fname}.svg'), dpi=300, transparent=True)
         plt.show()
     else:
         plt.show()
     plt.close()
     return
 
+
+def plot_qq_ensemble_zoomed(input_data_dict: dict, save_dir: str, output_fname: str):
+    sns.set_context('paper', font_scale=1.5)
+    with initialize(version_base=None, config_path="../../configs/", job_name="evaluation"):
+        config = compose(config_name="train")
+        config.data.data_config.condition_mode = 6  # alter if needed
+        config.data.data_config.image_size = 512
+        config.data.data_config.condition_size = 512
+        config.data.data_config.use_precomputed_era5 = False
+        config.data.data_config.use_precomputed_cpc = False
+    dataset = DailyAggregateRainfallDataset(config.data.data_config)
+    if not p.exists(save_dir):
+        os.makedirs(save_dir)
+
+    ours_dir, our_minus_dir, corrdiff_dir = (input_data_dict['ours'], input_data_dict['ours_minus'],
+                                             input_data_dict['corrdiff'])
+
+    ours_df, axis_max = gather_quantile_data(ours_dir, dataset, method_name='ours')
+    df_ours_minus, _ = gather_quantile_data(our_minus_dir, dataset, method_name='ours-')
+    df_corrdiff, _ = gather_quantile_data(corrdiff_dir, dataset, method_name='CorrDiff')
+    cpc_inter, _ = gather_quantile_data(ours_dir, dataset, method_name='CPC_Int', batch_key='precip_up')
+
+    mppe_ours = calc_mppe_ensemble_mean(ours_dir, dataset)
+    mppe_ours_minus = calc_mppe_ensemble_mean(our_minus_dir, dataset)
+    mppe_corrdiff = calc_mppe_ensemble_mean(corrdiff_dir, dataset)
+    print(f'MPPE for ours: {mppe_ours}')
+    print(f'MPPE for ours-: {mppe_ours_minus}')
+    print(f'MPPE for CorrDiff: {mppe_corrdiff}')
+
+    plt.rcParams['svg.fonttype'] = 'none'
+    sns.lineplot(data=df_ours_minus, y='sample_quantile', x='gt_quantile', color='tab:purple',
+                 markers='o', errorbar='sd', linewidth=1.0, err_kws={'edgecolor': 'none'})
+    sns.lineplot(data=df_corrdiff, y='sample_quantile', x='gt_quantile', color='saddlebrown',
+                 markers='o', errorbar='sd', linewidth=1.0, err_kws={'edgecolor': 'none'})
+    sns.lineplot(data=ours_df, y='sample_quantile', x='gt_quantile', color='tab:blue',
+                 markers='o', errorbar='sd', linewidth=1.0, err_kws={'edgecolor': 'none'})
+
+    ax = plt.gca()
+    ax.tick_params(width=0.5, length=3)
+
+    # plot y = x ideal line
+    x = np.linspace(0, int(axis_max), 100)
+    sns.lineplot(x=x, y=x, color="k", ls="--", linewidth=0.5)
+    for spine in ax.spines.values():
+        spine.set_linewidth(0.75)
+
+    # max_value = max(axis_max, ours_df.iloc[-1]['sample_quantile'], df_ours_minus.iloc[-1]['sample_quantile'],
+    #            df_corrdiff.iloc[-1]['sample_quantile'])
+    plt.xlim([axis_max * 0.6, axis_max])
+    plt.ylim([axis_max * 0.6, axis_max])
+    # plt.gca().set_aspect(1 / 1.3, adjustable='box')
+    sns.despine()
+    # plt.title('Quantile-Quantile Plot')
+    plt.ylabel('Prediction (mm/day)')
+    plt.xlabel('Target (mm/day)')
+    # plt.legend()
+    if save_dir is not None:
+        plt.savefig(p.join(save_dir, f'{output_fname}.svg'), dpi=300, transparent=True)
+        plt.show()
+    else:
+        plt.show()
+    plt.close()
+    return
 
 def dist_output_specific_sample():
     sns.set_context('paper')
@@ -710,7 +814,7 @@ def sample_bias_during_training():
     plt.show()
 
 def main():
-    # plot_qq_ensemble(16, '/home/yl241/data/rainfall_plots_LiT/general/qq/')
+    plot_qq_wrapper()
     # dist_output_specific_sample()
     # dist_mean_prior()
     # dist_mean_val_set()
@@ -721,7 +825,7 @@ def main():
     # build_hist_for_all_methods(ensemble_size=13, graph_to_build='hist')
     # build_hist_for_all_methods(ensemble_size=13, graph_to_build='spectra')
 
-    plot_additional_vis()
+    # plot_additional_vis()
     # plot_additional_vis_era5_ablation()
     # sample_bias_during_training()
 if __name__ == '__main__':
