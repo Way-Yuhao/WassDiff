@@ -8,6 +8,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pandas as pd
 import torch
+import xarray
 from hydra import compose, initialize
 from natsort import natsorted
 import rootutils
@@ -813,8 +814,15 @@ def sample_bias_during_training():
     # Display the plot
     plt.show()
 
+
+def plot_conus(dir_path: str, input_file: str = 'precip_output.nc'):
+    """Plot CONUS precipitation data from a NetCDF file."""
+    sample = xarray.load_dataarray()
+
+
+
 def main():
-    plot_qq_wrapper()
+    # plot_qq_wrapper()
     # dist_output_specific_sample()
     # dist_mean_prior()
     # dist_mean_val_set()
@@ -828,5 +836,7 @@ def main():
     # plot_additional_vis()
     # plot_additional_vis_era5_ablation()
     # sample_bias_during_training()
+    plot_conus("/scratch/qdai/data/rainfall_plots_LiT/storm_bill_new_full_size/")
+
 if __name__ == '__main__':
     main()

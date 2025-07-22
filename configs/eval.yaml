@@ -15,7 +15,7 @@ defaults:
    # it's optional since it doesn't need to exist and is excluded from version control
   - optional local: default
   - optional experiment: null
-  - _self_
+  - _self_1
 
 task_name: "eval"
 
