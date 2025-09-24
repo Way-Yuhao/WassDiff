@@ -84,6 +84,7 @@ Note that the evaluation results will be stored in `specified_eval_root_dir` spe
 To adjust ensemble size, append `model.num_samples=ENSEMBLE_SIZE` to command above.
 You may modify the `lon`, `lat`, and `date` parameters in `configs/experiment/specified_eval.yaml` 
 to specify the region and date of interest.
+
 ----------
 You can optioanlly use `tiled_diffusion` to generate larger images (such as to for the entire CONUS region).
 To do so, use `model=wassdiff_tiled` in the command below:
