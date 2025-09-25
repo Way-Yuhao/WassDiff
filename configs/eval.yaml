@@ -11,30 +11,16 @@ defaults:
   - paths: default
   - extras: default
   - hydra: default
-   # optional local config for machine/user specific settings
-   # it's optional since it doesn't need to exist and is excluded from version control
   - optional local: default
   - optional experiment: null
-  - _self_1
+  - _self_
 
 task_name: "eval"
-
 tags: ["dev"]
-
 ckpt_path: null
 name: null
 
 #### passing checkpoint path is necessary for evaluation
-## WassDiff
-#ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-05_20-56-22/checkpoints/epoch_740.ckpt
-#ckpt_path:${local.model_root_dir}/WassDiff-LiT/2024-09-11_12-07-58/checkpoints/epoch_679.ckpt
-#ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-11_12-07-58/checkpoints/epoch_740.ckpt
-#ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-11_12-07-58/checkpoints/last.ckpt
-#ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-15_23-56-41/checkpoints/epoch_802.ckpt
-#ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-23_13-17-17/checkpoints/epoch_1172.ckpt
-#ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-09-30_14-16-02/checkpoints/epoch_499_copy.ckpt
-#ckpt_path: ${local.model_root_dir}/WassDiff-LiT/2024-10-02_13-40-41/checkpoints/epoch_294_step_1101.ckpt
-
 
 # WassDiff
 model:
@@ -43,21 +29,4 @@ model:
   display_sampling_pbar: false  # debug
   pytorch_ckpt_path: ${local.model_root_dir}/NCSNPP/wandb/run-20240503_110757-gvq9r51l/checkpoints/checkpoint_21.pth
 
-
-#### SPECIFY EVAL MODE ####
-#name: debug_predefined_events_cold
-#event_name: cold_front
-#data:
-#  dataloader_mode: specify_eval
-#  batch_size: 1  # DO NOT MODIFY
-#  data_config:
-#    image_size: 256 # 512
-#  specify_eval_targets: ${data.known_eval_targets.${event_name}}
-##  specify_eval_targets:
-##    - date: '20150618'
-##      lon: 265
-##      lat: 36
-#paths:
-#  output_dir: ${local.specified_eval_root_dir}/${name}
-#  log_dir: ${paths.output_dir}
 
