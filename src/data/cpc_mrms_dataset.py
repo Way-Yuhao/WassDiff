@@ -71,69 +71,72 @@ class DailyAggregateRainfallDataset(Dataset):
         self.use_precomputed_mrms = data_config.use_precomputed_daily_aggregates
         self.use_precomputed_era5 = data_config.use_precomputed_era5
         self.use_precomputed_cpc = data_config.use_precomputed_cpc
+        self.historical_mode = data_config.historical_mode
+
         if self.use_precomputed_mrms:
-            yprint('Using precomputed MRMS daily aggregates')
+            print('Using precomputed MRMS daily aggregates')
             self.mrms_path = data_config.dataset_path.mrms_daily
         else:
-            yprint('Computing MRMS on the fly')
+            print('Computing MRMS on the fly')
             self.mrms_path = data_config.dataset_path.mrms
         if self.use_precomputed_era5:
-            yprint('Using precomputed ERA5 daily aggregates')
+            print('Using precomputed ERA5 daily aggregates')
             self.era5_path = data_config.dataset_path.interpolated_era5
             self.era5_filenames = data_config.interpolated_era5_filenames
         else:
-            yprint('Computing ERA5 on the fly')
+            print('Computing ERA5 on the fly')
             self.era5_path = data_config.dataset_path.era5
             self.era5_filenames = data_config.era5_filenames
         if self.use_precomputed_cpc:
-            yprint('Using precomputed CPC daily aggregates')
+            print('Using precomputed CPC daily aggregates')
             self.cpc_gauge_density_path = data_config.dataset_path.cpc_gauge
             self.cpc_aggregate_path = data_config.dataset_path.cpc
             self.interpolated_cpc_path = data_config.dataset_path.interpolated_cpc
             self.interpolated_cpc_gauge_density_path = data_config.dataset_path.interpolated_cpc_gauge
         else:
-            yprint('Computing CPC on the fly')
+            print('Computing CPC on the fly')
             self.cpc_aggregate_path = data_config.dataset_path.cpc
             self.cpc_gauge_density_path = data_config.dataset_path.cpc_gauge
 
         # Loading dates
-        if not self.use_precomputed_mrms:
-            files = os.listdir(self.mrms_path)
-            precip_files = natsorted([f for f in files if '.nc' in f])
-            # Regular expression to match the date part in the filenames
-            date_pattern = re.compile(r'.*_(\d{8})-\d{6}\.nc')
-            # Extract dates from the filenames
-            dates = []
-            for filename in precip_files:
-                match = date_pattern.match(filename)
-                if match:
-                    # The first group captures the date
-                    date = match.group(1)
-                    if date not in dates:
-                        dates.append(date)
-            self.precip_dates = dates  # list of dates where MRMS data is available
-            print('Loaded MRMS dataset containing {} combined daily aggregates'.format(len(self.precip_dates)))
-        else:  # precomputed
-            files = os.listdir(self.mrms_path)
-            precip_files = natsorted([f for f in files if '.nc' in f])
-            # files are named as mrms_daily_20150506.nc
-            date_pattern = re.compile(r'mrms_daily_(\d{8})\.nc')
-            dates = []
-            for filename in precip_files:
-                match = date_pattern.match(filename)
-                if match:
-                    date = match.group(1)
-                    if date not in dates:
-                        dates.append(date)
-            self.precip_dates = dates
-            # remove the date where MRMS switched to multisensor
-            # date_to_remove = data_config.mrms_switched_to_multisensor_on
-            dates_to_remove = data_config.invalid_daily_aggregates
-            self.precip_dates = [d for d in self.precip_dates if d not in dates_to_remove]
-            self.hourly_aggregate_def = data_config.hourly_aggregate_def
-            assert self.hourly_aggregate_def in ['starting', 'ending'], \
-                f'Invalid hourly aggregate definition: {self.hourly_aggregate_def}'
-            print('Loaded MRMS dataset containing {} daily aggregates'.format(len(self.precip_dates)))
+        if not self.historical_mode:
+            if not self.use_precomputed_mrms:
+                files = os.listdir(self.mrms_path)
+                precip_files = natsorted([f for f in files if '.nc' in f])
+                # Regular expression to match the date part in the filenames
+                date_pattern = re.compile(r'.*_(\d{8})-\d{6}\.nc')
+                # Extract dates from the filenames
+                dates = []
+                for filename in precip_files:
+                    match = date_pattern.match(filename)
+                    if match:
+                        # The first group captures the date
+                        date = match.group(1)
+                        if date not in dates:
+                            dates.append(date)
+                self.precip_dates = dates  # list of dates where MRMS data is available
+                print('Loaded MRMS dataset containing {} combined daily aggregates'.format(len(self.precip_dates)))
+            else:  # precomputed
+                files = os.listdir(self.mrms_path)
+                precip_files = natsorted([f for f in files if '.nc' in f])
+                # files are named as mrms_daily_20150506.nc
+                date_pattern = re.compile(r'mrms_daily_(\d{8})\.nc')
+                dates = []
+                for filename in precip_files:
+                    match = date_pattern.match(filename)
+                    if match:
+                        date = match.group(1)
+                        if date not in dates:
+                            dates.append(date)
+                self.precip_dates = dates
+                # remove the date where MRMS switched to multisensor
+                # date_to_remove = data_config.mrms_switched_to_multisensor_on
+                dates_to_remove = data_config.invalid_daily_aggregates
+                self.precip_dates = [d for d in self.precip_dates if d not in dates_to_remove]
+                self.hourly_aggregate_def = data_config.hourly_aggregate_def
+                assert self.hourly_aggregate_def in ['starting', 'ending'], \
+                    f'Invalid hourly aggregate definition: {self.hourly_aggregate_def}'
+                print('Loaded MRMS dataset containing {} daily aggregates'.format(len(self.precip_dates)))
 
         # define normalization functions
         self.precip_norm_func = data_config.precip_norm_func
@@ -160,11 +163,7 @@ class DailyAggregateRainfallDataset(Dataset):
         # gauge density data
         self.use_density = data_config.condition_mode == 6
         self.density_c = 20.  # cpc gauge density
-
         self.cmaps = data_config.cmaps
-
-        # historical mode
-        self.historical_mode = data_config.historical_mode
 
     def __len__(self):
         return len(self.precip_dates)
