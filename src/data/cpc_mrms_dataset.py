@@ -296,9 +296,9 @@ class DailyAggregateRainfallDataset(Dataset):
             cpc_lr = self.read_historical_cpc_daily_aggregate(date_)
 
         if self.use_precomputed_mrms:
-            mrms = self.read_precomputed_mrms_daily_aggregate('20200101')
+            mrms = self.read_precomputed_mrms_daily_aggregate(self.precip_dates[0])  # random mrms for reference
         else:
-            mrms = self.read_mrms_daily_aggregate('20200101')
+            mrms = self.read_mrms_daily_aggregate(self.precip_dates[0])  # random mrms for reference
 
         cpc_lr = self.truncate_dataarray(cpc_lr)
         mrms = self.truncate_dataarray(mrms)
