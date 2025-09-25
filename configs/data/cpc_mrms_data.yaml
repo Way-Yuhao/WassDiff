@@ -29,7 +29,7 @@ data_config:
       lon_min: 235
       lon_max: 295
   mrms_switched_to_multisensor_on: '20201013'
-  invalid_daily_aggregates: ['20150506', '20150507', '20150506','20201014', '20191012']
+  invalid_daily_aggregates: ['20150506', '20150507', '20201014', '20191012']
   use_precomputed_daily_aggregates: true
   use_precomputed_era5: true
   use_precomputed_cpc: true # both precip and gauge density
