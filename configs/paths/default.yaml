@@ -21,16 +21,14 @@ work_dir: ${hydra:runtime.cwd}
 
 dataset_path:
   base_path: ${paths.data_dir}
-  mrms: '${paths.dataset_path.base_path}/CLIMATE/nexrad'
-  era5: '${paths.dataset_path.base_path}/CLIMATE/ERA5'
-  interpolated_era5: '${paths.dataset_path.base_path}/CLIMATE/ERA5_INTERP'
-  interpolated_cpc: '${paths.dataset_path.base_path}/CLIMATE/CPC_INTERP/precip'
-  interpolated_cpc_gauge: '${paths.dataset_path.base_path}/CLIMATE/CPC_INTERP/gauge_density'
-  cpc: '${paths.dataset_path.base_path}/CLIMATE/CPC'
-  # mrms_daily: '/home/yl241/data/CLIMATE/mrms_daily/' # precomputed daily aggregates
-  # mrms_daily: '/home/yl241/data/CLIMATE/mrms_daily_12z/' # precomputed daily aggregates
-  mrms_daily: '${paths.dataset_path.base_path}/CLIMATE/mrms_daily_12z_ending/' # precomputed daily aggregates
-  cpc_gauge: '${paths.dataset_path.base_path}/CLIMATE/CPC/GAUGE_CONUS_RT'
+  mrms: '${paths.dataset_path.base_path}/nexrad'
+  era5: '${paths.dataset_path.base_path}/ERA5'
+  interpolated_era5: '${paths.dataset_path.base_path}/ERA5_INTERP'
+  interpolated_cpc: '${paths.dataset_path.base_path}/CPC_INTERP/precip'
+  interpolated_cpc_gauge: '${paths.dataset_path.base_path}/CPC_INTERP/gauge_density'
+  cpc: '${paths.dataset_path.base_path}/CPC'
+  mrms_daily: '${paths.dataset_path.base_path}/mrms_daily_12z_ending/' # precomputed daily aggregates
+  cpc_gauge: '${paths.dataset_path.base_path}/CPC/GAUGE_CONUS_RT'
 era5_filenames:
   surf_temp: "single_level/2m_temperature_{}.nc"
   elevation: "single_level/elevation.nc"
