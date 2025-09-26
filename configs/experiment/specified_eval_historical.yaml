@@ -22,4 +22,4 @@ data:
 paths:
   dataset_path:
     cpc_gauge: '${paths.dataset_path.base_path}/CPC/HISTORICAL'
-    era5: '${paths.dataset_path.base_path}/ERA5_1940-2022'
+#    era5: '${paths.dataset_path.base_path}/ERA5_1940-2022'
