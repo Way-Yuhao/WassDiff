@@ -319,6 +319,10 @@ class DailyAggregateRainfallDataset(Dataset):
         batch = self.normalize_era5(batch)
         batch = self.normalize_density(batch)
         batch = self.cvt_to_tensor(batch)
+
+        batch['precip_gt'] = torch.zeros(batch['precip_gt'].shape)
+        xr_batch_low_res.pop('precip_gt', None)
+
         return batch, batch_coord, xr_batch_low_res, valid_mask
 
     def read_cpc_daily_aggregate(self, date_: str) -> xr.DataArray:

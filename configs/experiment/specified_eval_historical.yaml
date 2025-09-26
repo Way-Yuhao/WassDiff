@@ -1,0 +1,25 @@
+# @package _global_
+
+defaults:
+  - specified_eval
+  - _self_
+
+# --- OPTION A --- #
+event_name: southeast_texas_storm # <- change event name if needed
+# OR
+# --- OPTION B --- #
+#  specify_eval_targets:
+#    - date: '19941017'
+#      lon: 264
+#      lat: 32
+
+data:
+  data_config:
+    use_precomputed_era5: false
+    use_precomputed_cpc: false
+    historical_mode: true
+
+paths:
+  dataset_path:
+    cpc_gauge: '${paths.dataset_path.base_path}/CPC/HISTORICAL'
+    era5: '${paths.dataset_path.base_path}/ERA5_1940-2022'

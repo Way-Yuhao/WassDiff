@@ -4,3 +4,5 @@ save_xarray_results:
   csi_threshold: ${metrics.csi_threshold}
   heavy_rain_threshold: ${metrics.heavy_rain_threshold}
   peak_mesoscale_threshold: ${metrics.peak_mesoscale_threshold}
+  show_metrics: true
+  rainfall_vis_max: null
