@@ -52,7 +52,7 @@ class SlackAlert(Callback):
             self.configured = False
             return
         if self.webhook_url is None:
-            logger.warning('SlackAlert not configured. To send alerts to slack, '
+            logger.debug('SlackAlert not configured. To send alerts to slack, '
                            'set SLACK_WEBHOOK_URL in .env file under project root directory.')
             self.configured = False
         else:
