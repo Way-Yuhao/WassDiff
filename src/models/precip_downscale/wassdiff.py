@@ -16,7 +16,9 @@ from src.utils.ncsn_utils.sampling import ReverseDiffusionPredictor, LangevinCor
 import src.utils.ncsn_utils.controllable_generation as controllable_generation
 from src.utils.ncsn_utils.utils import restore_checkpoint
 from src.utils.ncsn_utils.losses import get_optimizer
-from src.utils.helper import yprint
+from src.utils import RankedLogger
+
+log = RankedLogger(__name__, rank_zero_only=True)
 
 
 class WassDiffLitModule(LightningModule):
@@ -151,7 +153,7 @@ class WassDiffLitModule(LightningModule):
             state = dict(step=0, optimizer=optimizer, model=score_model, ema=ema)
             state = restore_checkpoint(self.hparams.pytorch_ckpt_path, state, self.device)
             ema.copy_to(score_model.parameters())
-            yprint(f"\nRestored model from Pytorch ckpt: {self.hparams.pytorch_ckpt_path}")
+            log.info(f"\nRestored model from Pytorch ckpt: {self.hparams.pytorch_ckpt_path}")
 
         # sigmas = mutils.get_sigmas(self.model_config) # not used here or NCSN codebase
         self.scaler = datasets.get_data_scaler(self.model_config)
