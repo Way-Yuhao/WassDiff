@@ -2,12 +2,11 @@
 Util functions for interactive visualization (e.g., folium, ipyleaflet)
 """
 __author__ = 'yuhao liu'
-import xarray as xr
-import rioxarray as rio
-import numpy as np
-from xarray import DataArray
 
-def read_output_nc(file_path: str, var_name: str = 'precip_output') -> DataArray:
+import os
+import xarray as xr
+
+def read_output_nc(file_path: str, var_name: str = 'precip_output') -> xr.Dataset:
     """
     Read NetCDF file (lon, lat) and return xarray DataArray with spatial dims and CRS set.
     Parameters:
@@ -17,6 +16,7 @@ def read_output_nc(file_path: str, var_name: str = 'precip_output') -> DataArray
     - da: xarray.DataArray with spatial dimensions and CRS set.
     """
     # open dataset
+    assert os.path.isfile(file_path), f"File not found: {file_path}"
     ds  = xr.open_dataset(file_path)
     da  = ds[var_name]
     # make longitude −180…180
