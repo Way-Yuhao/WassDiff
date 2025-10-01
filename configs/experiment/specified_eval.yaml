@@ -15,7 +15,7 @@ data:
   batch_size: 1  # DO NOT MODIFY
   data_config:
     image_size: 512 # (a) width, or (b) [height,width], or (c) 'full'
-#  specify_eval_targets: ${data.known_eval_targets.${event_name}}
+  specify_eval_targets: ${data.known_eval_targets.${event_name}}
 #  specify_eval_targets:
 #    - date: '20150618'
 #      lon: 265
