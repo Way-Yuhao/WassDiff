@@ -2,7 +2,7 @@ import torch
 
 
 def restore_checkpoint(ckpt_path, state, device):
-    loaded_state = torch.load(ckpt_path, map_location=device)
+    loaded_state = torch.load(ckpt_path, map_location=device, weights_only=False)
     if 'pytorch-lightning_version' in loaded_state:
         print('Loading a LiT model...')
         # state['model'].load_state_dict(loaded_state['model'], strict=False)

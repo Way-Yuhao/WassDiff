@@ -71,28 +71,30 @@ class DailyAggregateRainfallDataset(Dataset):
         self.use_precomputed_mrms = data_config.use_precomputed_daily_aggregates
         self.use_precomputed_era5 = data_config.use_precomputed_era5
         self.use_precomputed_cpc = data_config.use_precomputed_cpc
+        self.historical_mode = data_config.historical_mode
+
         if self.use_precomputed_mrms:
-            yprint('Using precomputed MRMS daily aggregates')
+            print('Using precomputed MRMS daily aggregates')
             self.mrms_path = data_config.dataset_path.mrms_daily
         else:
-            yprint('Computing MRMS on the fly')
+            print('Computing MRMS on the fly')
             self.mrms_path = data_config.dataset_path.mrms
         if self.use_precomputed_era5:
-            yprint('Using precomputed ERA5 daily aggregates')
+            print('Using precomputed ERA5 daily aggregates')
             self.era5_path = data_config.dataset_path.interpolated_era5
             self.era5_filenames = data_config.interpolated_era5_filenames
         else:
-            yprint('Computing ERA5 on the fly')
+            print('Computing ERA5 on the fly')
             self.era5_path = data_config.dataset_path.era5
             self.era5_filenames = data_config.era5_filenames
         if self.use_precomputed_cpc:
-            yprint('Using precomputed CPC daily aggregates')
+            print('Using precomputed CPC daily aggregates')
             self.cpc_gauge_density_path = data_config.dataset_path.cpc_gauge
             self.cpc_aggregate_path = data_config.dataset_path.cpc
             self.interpolated_cpc_path = data_config.dataset_path.interpolated_cpc
             self.interpolated_cpc_gauge_density_path = data_config.dataset_path.interpolated_cpc_gauge
         else:
-            yprint('Computing CPC on the fly')
+            print('Computing CPC on the fly')
             self.cpc_aggregate_path = data_config.dataset_path.cpc
             self.cpc_gauge_density_path = data_config.dataset_path.cpc_gauge
 
@@ -160,11 +162,7 @@ class DailyAggregateRainfallDataset(Dataset):
         # gauge density data
         self.use_density = data_config.condition_mode == 6
         self.density_c = 20.  # cpc gauge density
-
         self.cmaps = data_config.cmaps
-
-        # historical mode
-        self.historical_mode = data_config.historical_mode
 
     def __len__(self):
         return len(self.precip_dates)
@@ -298,9 +296,9 @@ class DailyAggregateRainfallDataset(Dataset):
             cpc_lr = self.read_historical_cpc_daily_aggregate(date_)
 
         if self.use_precomputed_mrms:
-            mrms = self.read_precomputed_mrms_daily_aggregate('20200101')
+            mrms = self.read_precomputed_mrms_daily_aggregate(self.precip_dates[0])  # random mrms for reference
         else:
-            mrms = self.read_mrms_daily_aggregate('20200101')
+            mrms = self.read_mrms_daily_aggregate(self.precip_dates[0])  # random mrms for reference
 
         cpc_lr = self.truncate_dataarray(cpc_lr)
         mrms = self.truncate_dataarray(mrms)
@@ -321,6 +319,10 @@ class DailyAggregateRainfallDataset(Dataset):
         batch = self.normalize_era5(batch)
         batch = self.normalize_density(batch)
         batch = self.cvt_to_tensor(batch)
+
+        batch['precip_gt'] = torch.zeros(batch['precip_gt'].shape)
+        xr_batch_low_res.pop('precip_gt', None)
+
         return batch, batch_coord, xr_batch_low_res, valid_mask
 
     def read_cpc_daily_aggregate(self, date_: str) -> xr.DataArray:

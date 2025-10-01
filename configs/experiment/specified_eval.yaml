@@ -6,6 +6,7 @@ defaults:
 
 model:
   num_samples: 1  # ensemble size
+#  display_sampling_pbar: true
 
 #### SPECIFY EVAL MODE ####
 event_name: storm_bill
