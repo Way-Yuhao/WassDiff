@@ -11,6 +11,15 @@
 
 </div>
 
+This is the official implementation of the paper 
+[_Downscaling Extreme Precipitation with Wasserstein Regularized Diffusion_](https://ieeexplore.ieee.org/document/11172297). 
+To quickly experiment with the proposed diffusion downscaling model (called WassDiff), 
+we recommend trying this Colab [demo](https://colab.research.google.com/drive/1A07CzPGE1imSnkaQtU34fNIVIYMRXIWV?usp=sharing).
+
+<div align="center">
+  <img src="assets/demo.webp" alt="Demo screenshot" width="600">
+</div>
+
 ## Dependencies
 To create a conda environment with all the required packages, run:
 ```
