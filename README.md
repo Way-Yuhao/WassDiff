@@ -27,17 +27,15 @@ conda env create -f environment.yml
 ```
 
 ## Dataset Compilation
-
 We present two options to obtain the dataset required for this project. 
 
-### Option A: mini-dataset for quick visualization & validation
+### _Option A_: mini-dataset for quick visualization & validation
 If you would like to quickly test-run the pre-trained model, please download a mini-dataset on 
 [Hugging Face](https://huggingface.co/YuhaoL/WassDiff/tree/main/mini_dataset), 
 which contains all required historical inputs from 1990 – 2000 on CONUS.
 Keep in mind that there is no ground-truth radar measurements at this time.
 
-### Option B: full dataset
-
+### _Option B_: full dataset
 If you would like to train the model from scratch, 
 then here is the instructions on how to obtain required training and validation data: 
 
@@ -47,8 +45,8 @@ The gauge density files are stored separately on NOAA's FTP server [here](https:
 Download `.gz` files from [here](https://ftp.cpc.ncep.noaa.gov/precip/CPC_UNI_PRCP/GAUGE_CONUS/RT/).
 
 **ERA5 and MRMS**: download instructions can be found on this [repository](https://github.com/dossgollin-lab/climate-data).
-
-### Prepare datasets
+---
+### Setup dataset configs
 
 Once all the data are downloaded, navigate to `configs/local/default.yaml` and update these entries according to 
 where the data are stored on your local machine: 
