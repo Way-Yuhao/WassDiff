@@ -30,7 +30,7 @@ conda env create -f environment.yml
 
 We present two options to obtain the dataset required for this project. 
 
-### Option A: mini-dataset of quick visualization & validation
+### Option A: mini-dataset for quick visualization & validation
 If you would like to quickly test-run the pre-trained model, please download a mini-dataset on 
 [Hugging Face](https://huggingface.co/YuhaoL/WassDiff/tree/main/mini_dataset), 
 which contains all required historical inputs from 1990 – 2000 on CONUS.
