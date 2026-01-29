@@ -45,7 +45,9 @@ The gauge density files are stored separately on NOAA's FTP server [here](https:
 Download `.gz` files from [here](https://ftp.cpc.ncep.noaa.gov/precip/CPC_UNI_PRCP/GAUGE_CONUS/RT/).
 
 **ERA5 and MRMS**: download instructions can be found on this [repository](https://github.com/dossgollin-lab/climate-data).
+
 ---
+
 ### Setup dataset configs
 
 Once all the data are downloaded, navigate to `configs/local/default.yaml` and update these entries according to 
