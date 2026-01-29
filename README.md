@@ -20,13 +20,13 @@ we recommend trying this Colab [demo](https://colab.research.google.com/drive/1A
   <img src="assets/demo.webp" alt="Demo screenshot" width="600">
 </div>
 
-## Dependencies
+## Install dependencies
 To create a conda environment with all the required packages, run:
 ```
 conda env create -f environment.yml
 ```
 
-## Dataset Compilation
+## Compile datasets
 We present two options to obtain the dataset required for this project. 
 
 ### _Option A_: mini dataset
