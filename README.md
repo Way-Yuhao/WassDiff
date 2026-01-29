@@ -46,8 +46,6 @@ Download `.gz` files from [here](https://ftp.cpc.ncep.noaa.gov/precip/CPC_UNI_PR
 
 **ERA5 and MRMS**: download instructions can be found on this [repository](https://github.com/dossgollin-lab/climate-data).
 
----
-
 ### Setup dataset configs
 
 Once all the data are downloaded, navigate to `configs/local/default.yaml` and update these entries according to 
